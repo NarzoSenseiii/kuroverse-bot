@@ -74,6 +74,14 @@ async function sendLog(guild, embed) {
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}`);
+
+  client.user.setPresence({
+    status: 'online',
+    activities: [{
+      name: '.gg/wQvb6aqZWZ',
+      type: 4
+    }]
+  });
 });
 
 // 🔹 PREFIX COMMANDS
