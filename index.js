@@ -1,4 +1,5 @@
 require('dotenv').config();
+process.env.FFMPEG_PATH = require('ffmpeg-static');
 const {
   Client,
   GatewayIntentBits,
@@ -62,7 +63,7 @@ const distube = new DisTube(client, {
   emitNewSongOnly: false,
   joinNewVoiceChannel: true,
   ffmpeg: {
-    path: 'ffmpeg',
+    path: require('ffmpeg-static'),
   },
 });
 
