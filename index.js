@@ -227,6 +227,34 @@ client.on('messageCreate', async message => {
       message.reply("Error muting user.");
     }
   }
+  // CHOOSE
+  if (command === 'choose') {
+    try {
+      const input = args.slice(1).join(' ');
+      if (!input.includes(' or ')) return message.reply("Format: `.choose option1 or option2`");
+
+      const options = input.split(' or ').map(o => o.trim()).filter(o => o.length > 0);
+      if (options.length < 2) return message.reply("Provide at least 2 options separated by `or`.");
+
+      const chosen = options[Math.floor(Math.random() * options.length)];
+
+      const embed = new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setAuthor({ name: 'I choose...', iconURL: message.guild.iconURL() })
+        .setDescription(`**${chosen}**`)
+        .addFields(
+          { name: "🎲 Options", value: options.map((o, i) => `**${i + 1}.** ${o}`).join('\n') }
+        )
+        .setFooter({ text: `Requested by ${message.member.displayName}`, iconURL: message.author.displayAvatarURL() })
+        .setTimestamp();
+
+      message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+
+    } catch (err) {
+      console.error(err);
+      message.reply("Error choosing.");
+    }
+  }
   // LOCK
   if (command === 'lock') {
     try {
