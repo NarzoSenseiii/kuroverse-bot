@@ -227,6 +227,27 @@ client.on('messageCreate', async message => {
       message.reply("Error muting user.");
     }
   }
+  // MEMBERCOUNT
+  if (command === 'membercount' || command === 'mc') {
+    try {
+      const guild = message.guild;
+      await guild.fetch();
+
+      const embed = new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setAuthor({ name: guild.name, iconURL: guild.iconURL() })
+        .addFields(
+          { name: "<:user:1487021741720076309> Total Members", value: `${guild.memberCount}`, inline: true }
+        )
+        .setTimestamp();
+
+      message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+
+    } catch (err) {
+      console.error(err);
+      message.reply("Error fetching member count.");
+    }
+  }
   // SERVERINFO
   if (command === 'serverinfo' || command === 'si') {
     try {
