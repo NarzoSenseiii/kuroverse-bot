@@ -63,6 +63,48 @@ function noPermsEmbed(action) {
     .setTimestamp();
 }
 
+// 🔺 Role hierarchy check embed
+function hierarchyEmbed(action) {
+  return new EmbedBuilder()
+    .setColor(0xff3b3b)
+    .setAuthor({ name: 'Missing Permissions' })
+    .setDescription(
+      `<:flash:1487027526394974218> **You cannot \`${action}\` this member.**\n\n` +
+      `Their role is equal to or higher than yours in the hierarchy.`
+    )
+    .setTimestamp();
+}
+
+// 🔍 Resolve member by mention or raw ID
+async function resolveMember(guild, arg) {
+  if (!arg) return null;
+  const idMatch = arg.match(/^<?@?!?(\d{17,19})>?$/);
+  if (!idMatch) return null;
+  try { return await guild.members.fetch(idMatch[1]); }
+  catch { return null; }
+}
+
+// 🔺 Role hierarchy check embed
+function hierarchyEmbed(action) {
+  return new EmbedBuilder()
+    .setColor(0xff3b3b)
+    .setAuthor({ name: 'Missing Permissions' })
+    .setDescription(
+      `<:flash:1487027526394974218> **You cannot \`${action}\` this member.**\n\n` +
+      `Their role is equal to or higher than yours in the hierarchy.`
+    )
+    .setTimestamp();
+}
+
+// 🔍 Resolve member by mention or raw ID
+async function resolveMember(guild, arg) {
+  if (!arg) return null;
+  const idMatch = arg.match(/^<?@?!?(\d{17,19})>?$/);
+  if (!idMatch) return null;
+  try { return await guild.members.fetch(idMatch[1]); }
+  catch { return null; }
+}
+
 const LOG_CHANNEL_ID = '1484500454225477743';
 
 async function sendLog(guild, embed) {
@@ -107,10 +149,15 @@ client.on('messageCreate', async message => {
         });
       }
 
-      const user = message.mentions.users.first();
-      if (!user) return message.reply("Mention a user.");
+      const member = await resolveMember(message.guild, args[1]);
+      if (!member) return message.reply("Mention a user or provide a valid user ID.");
 
-      const member = await message.guild.members.fetch(user.id);
+      if (message.member.roles.highest.position <= member.roles.highest.position) {
+        return message.channel.send({
+          embeds: [hierarchyEmbed('mute')],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
 
       let timeArg = args[2];
       let reason;
@@ -129,7 +176,7 @@ client.on('messageCreate', async message => {
 
       let dmStatus = "No";
       try {
-        await user.send({
+        await member.user.send({
           embeds: [new EmbedBuilder()
             .setColor(0xff3b3b)
             .setDescription(
@@ -278,16 +325,21 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
         });
       }
 
-      const user = message.mentions.users.first();
-      if (!user) return message.reply("Mention a user.");
+      const member = await resolveMember(message.guild, args[1]);
+      if (!member) return message.reply("Mention a user or provide a valid user ID.");
 
-      const member = await message.guild.members.fetch(user.id);
+      if (message.member.roles.highest.position <= member.roles.highest.position) {
+        return message.channel.send({
+          embeds: [hierarchyEmbed('unmute')],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
 
       await member.timeout(null);
 
       let dmStatus = "No";
       try {
-        await user.send({
+        await member.user.send({
           embeds: [new EmbedBuilder()
             .setColor(0x57F287)
             .setDescription(
@@ -345,10 +397,16 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
         });
       }
 
-      const user = message.mentions.users.first();
-      if (!user) return message.reply("Mention a user.");
+      const member = await resolveMember(message.guild, args[1]);
+      if (!member) return message.reply("Mention a user or provide a valid user ID.");
 
-      const member = await message.guild.members.fetch(user.id);
+      if (message.member.roles.highest.position <= member.roles.highest.position) {
+        return message.channel.send({
+          embeds: [hierarchyEmbed('nick')],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
       const newNick = args.slice(2).join(" ");
       if (!newNick) return message.reply("Provide a nickname.");
 
@@ -390,17 +448,23 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
         });
       }
 
-      const user = message.mentions.users.first();
-      if (!user) return message.reply("Mention a user.");
+      const member = await resolveMember(message.guild, args[1]);
+      if (!member) return message.reply("Mention a user or provide a valid user ID.");
 
-      const member = await message.guild.members.fetch(user.id);
+      if (message.member.roles.highest.position <= member.roles.highest.position) {
+        return message.channel.send({
+          embeds: [hierarchyEmbed('ban')],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
       const reason = args.slice(2).join(" ") || "No reason provided";
 
       await member.ban({ reason });
 
       let dmStatus = "No";
       try {
-        await user.send({
+        await member.user.send({
           embeds: [new EmbedBuilder()
             .setColor(0xff3b3b)
             .setDescription(
@@ -461,17 +525,23 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
         });
       }
 
-      const user = message.mentions.users.first();
-      if (!user) return message.reply("Mention a user.");
+      const member = await resolveMember(message.guild, args[1]);
+      if (!member) return message.reply("Mention a user or provide a valid user ID.");
 
-      const member = await message.guild.members.fetch(user.id);
+      if (message.member.roles.highest.position <= member.roles.highest.position) {
+        return message.channel.send({
+          embeds: [hierarchyEmbed('kick')],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
       const reason = args.slice(2).join(" ") || "No reason provided";
 
       await member.kick();
 
       let dmStatus = "No";
       try {
-        await user.send({
+        await member.user.send({
           embeds: [new EmbedBuilder()
             .setColor(0xff3b3b)
             .setDescription(
@@ -524,13 +594,20 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
         });
       }
 
-      const user = message.mentions.users.first();
-      if (!user) return message.reply("Mention a user.");
-      const member = await message.guild.members.fetch(user.id);
+      const member = await resolveMember(message.guild, args[1]);
+      if (!member) return message.reply("Mention a user or provide a valid user ID.");
+
+      if (message.member.roles.highest.position <= member.roles.highest.position) {
+        return message.channel.send({
+          embeds: [hierarchyEmbed('warn')],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
       const reason = args.slice(2).join(" ") || "No reason provided";
 
       const warns = loadWarns();
-      const key = `${message.guild.id}_${user.id}`;
+      const key = `${message.guild.id}_${member.id}`;
       if (!warns[key]) warns[key] = [];
       warns[key].push({ reason, by: invokerId, at: Date.now() });
       saveWarns(warns);
@@ -538,7 +615,7 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
       const count = warns[key].length;
 
       try {
-        await user.send({
+        await member.user.send({
           embeds: [new EmbedBuilder()
             .setColor(0xFFA500)
             .setDescription(
@@ -563,14 +640,14 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
             { name: 'Duration', value: '6 hours', inline: true }
           ).setTimestamp());
         try {
-          await user.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b)
+          await member.user.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b)
             .setDescription(`<:muteee:1487085617119756358> **You have been auto-muted for 6 hours** in **${message.guild.name}** for reaching 3 warnings.`).setTimestamp()] });
         } catch {}
       }
 
       if (count === 5) {
         try {
-          await user.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b)
+          await member.user.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b)
             .setDescription(`<:flashwarn:1487025332841091182> **You have been auto-kicked** from **${message.guild.name}** for reaching 5 warnings.`).setTimestamp()] });
         } catch {}
         await member.kick("5 warnings reached");
@@ -612,12 +689,11 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
         });
       }
 
-      const user = message.mentions.users.first();
-      if (!user) return message.reply("Mention a user.");
-      const member = await message.guild.members.fetch(user.id);
+      const member = await resolveMember(message.guild, args[1]);
+      if (!member) return message.reply("Mention a user or provide a valid user ID.");
 
       const warns = loadWarns();
-      const key = `${message.guild.id}_${user.id}`;
+      const key = `${message.guild.id}_${member.id}`;
       const prev = warns[key]?.length || 0;
       warns[key] = [];
       saveWarns(warns);
@@ -653,12 +729,11 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
         });
       }
 
-      const user = message.mentions.users.first();
-      if (!user) return message.reply("Mention a user.");
-      const member = await message.guild.members.fetch(user.id);
+      const member = await resolveMember(message.guild, args[1]);
+      if (!member) return message.reply("Mention a user or provide a valid user ID.");
 
       const warns = loadWarns();
-      const key = `${message.guild.id}_${user.id}`;
+      const key = `${message.guild.id}_${member.id}`;
       if (!warns[key] || warns[key].length === 0) return message.reply("This user has no warnings.");
 
       warns[key].pop();
@@ -689,11 +764,12 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
   // WARNS (self-check, usable by everyone)
   if (command === 'warns') {
     try {
-      const target = message.mentions.users.first() || message.author;
-      const member = await message.guild.members.fetch(target.id);
+      const member = args[1]
+        ? (await resolveMember(message.guild, args[1])) || await message.guild.members.fetch(message.author.id)
+        : await message.guild.members.fetch(message.author.id);
 
       const warns = loadWarns();
-      const key = `${message.guild.id}_${target.id}`;
+      const key = `${message.guild.id}_${member.id}`;
       const list = warns[key] || [];
 
       const embed = new EmbedBuilder()
