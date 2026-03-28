@@ -117,7 +117,7 @@ client.on('messageCreate', async message => {
     afkMap.delete(message.author.id);
     message.channel.send({ embeds: [new EmbedBuilder()
       .setColor(0x2b2d31)
-      .setDescription(`<:tick:1487030751550509066> Welcome back <@${message.author.id}>! Your AFK has been removed.${pings > 0 ? `\n<:reason:1487022066644291614> You got **${pings}** ping${pings === 1 ? '' : 's'} while you were away.` : ''}`)
+      .setDescription(`<:tick:1487030751550509066> Welcome back <@${message.author.id}>! Your AFK has been removed.${pings > 0 ? `\n<:book_move:1484604157221540020> You got **${pings}** ping${pings === 1 ? '' : 's'} while you were away.` : ''}`)
       .setTimestamp()] }).catch(() => {});
   }
 
@@ -842,7 +842,7 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
     const embed = new EmbedBuilder()
       .setColor(0x2b2d31)
       .setAuthor({ name: `${message.member.displayName} is now AFK`, iconURL: message.author.displayAvatarURL() })
-      .setDescription(`<:reason:1487022066644291614> ${reason}`)
+      .setDescription(`**Reason:** ${reason}`)
       .setTimestamp();
 
     message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
