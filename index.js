@@ -23,7 +23,7 @@ const client = new Client({
 const prefix = ".";
 const fs = require('fs');
 const WARNS_FILE = './warnings.json';
-const afkMap = new Map(); // userId -> { reason, since }
+const afkMap = new Map();
 
 function loadWarns() {
   if (!fs.existsSync(WARNS_FILE)) return {};
@@ -34,7 +34,6 @@ function saveWarns(data) {
   fs.writeFileSync(WARNS_FILE, JSON.stringify(data, null, 2));
 }
 
-// 🧠 Time parser
 function parseTime(time) {
   const num = parseInt(time);
   if (time.endsWith('s')) return num * 1000;
@@ -44,7 +43,6 @@ function parseTime(time) {
   return null;
 }
 
-// 🗑️ Delete button
 function makeDeleteBtn(invokerId) {
   return new ButtonBuilder()
     .setCustomId(`delete_msg_${invokerId}`)
@@ -52,7 +50,6 @@ function makeDeleteBtn(invokerId) {
     .setStyle(ButtonStyle.Secondary);
 }
 
-// 🚫 No permissions embed
 function noPermsEmbed(action) {
   return new EmbedBuilder()
     .setColor(0xff3b3b)
@@ -64,7 +61,6 @@ function noPermsEmbed(action) {
     .setTimestamp();
 }
 
-// 🔺 Role hierarchy check embed
 function hierarchyEmbed(action) {
   return new EmbedBuilder()
     .setColor(0xff3b3b)
@@ -76,7 +72,6 @@ function hierarchyEmbed(action) {
     .setTimestamp();
 }
 
-// 🔍 Resolve member by mention or raw ID
 async function resolveMember(guild, arg) {
   if (!arg) return null;
   const idMatch = arg.match(/^<?@?!?(\d{17,19})>?$/);
@@ -94,9 +89,9 @@ async function sendLog(guild, embed) {
   } catch (e) { console.error('Log error:', e); }
 }
 
-// 🛡️ ANTI-SPAM SYSTEM
+// ─── ANTI-SPAM ───────────────────────────────────────────────
 let antiSpamEnabled = false;
-const spamMap = new Map(); // userId -> { messages: [], muteLevel: 0, lastMuteEnd: 0 }
+const spamMap = new Map();
 const OWNER_ID = '1212375999132467270';
 
 async function handleAntiSpam(message) {
@@ -110,10 +105,7 @@ async function handleAntiSpam(message) {
   if (!spamMap.has(userId)) spamMap.set(userId, { messages: [], muteLevel: 0, lastMuteEnd: 0 });
   const data = spamMap.get(userId);
 
-  // reset escalation if more than 1 min has passed since last mute ended
-  if (data.lastMuteEnd && now - data.lastMuteEnd > 60000) {
-    data.muteLevel = 0;
-  }
+  if (data.lastMuteEnd && now - data.lastMuteEnd > 60000) data.muteLevel = 0;
 
   data.messages.push({ id: message.id, time: now });
   data.messages = data.messages.filter(m => now - m.time < 5000);
@@ -132,19 +124,16 @@ async function handleAntiSpam(message) {
   }
 
   const isMax = muteDuration === 43200000;
-  data.muteLevel = isMax ? 0 : data.muteLevel + 1; // reset after 12hr
+  data.muteLevel = isMax ? 0 : data.muteLevel + 1;
   data.lastMuteEnd = now + muteDuration;
 
-  // delete messages
   try {
     const toDelete = deleteAll ? msgIds : msgIds.slice(1);
     await message.channel.bulkDelete(toDelete, true).catch(() => {});
   } catch {}
 
-  // mute
   try { await message.member.timeout(muteDuration); } catch {}
 
-  // channel embed
   message.channel.send({ embeds: [new EmbedBuilder()
     .setColor(0x2b2d31)
     .setAuthor({ name: `${message.author.tag} has been muted`, iconURL: message.author.displayAvatarURL() })
@@ -154,7 +143,6 @@ async function handleAntiSpam(message) {
       { name: "<:reason:1487022066644291614> Reason", value: 'Anti-spam — sending messages too fast.' }
     ).setTimestamp()] }).catch(() => {});
 
-  // DM user
   message.author.send({ embeds: [new EmbedBuilder()
     .setColor(0xff3b3b)
     .setDescription(
@@ -166,7 +154,6 @@ async function handleAntiSpam(message) {
 <:reason:1487022066644291614> Reason: Anti-spam — sending messages too fast.`
     ).setTimestamp()] }).catch(() => {});
 
-  // log
   sendLog(message.guild, new EmbedBuilder()
     .setColor(0xff3b3b).setTitle('🛡️ Anti-Spam Mute')
     .addFields(
@@ -176,7 +163,6 @@ async function handleAntiSpam(message) {
       { name: 'Escalation Level', value: `${data.muteLevel}`, inline: true }
     ).setTimestamp());
 
-  // DM owner if 12hr mute
   if (isMax) {
     try {
       const owner = await client.users.fetch(OWNER_ID);
@@ -196,25 +182,113 @@ async function handleAntiSpam(message) {
   }
 }
 
+// ─── HELP PAGES ──────────────────────────────────────────────
+// 0 = Overview, 1 = Moderation, 2 = Warnings, 3 = Utility
+const helpPages = [
+  (guild) => new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setAuthor({ name: `${guild.name} — Command Help`, iconURL: guild.iconURL() })
+    .setDescription(
+      `Welcome to the help menu! Use the buttons below to browse categories.\n\n` +
+      `**Prefix:** \`.\`  •  **Total Commands:** 20\n\n` +
+      `> <:moderator:1487021865682735225> **Moderation** — Ban, kick, mute, unmute & more\n` +
+      `> <:warn:1487084599296135311> **Warnings** — Warn, view, clear & remove warns\n` +
+      `> <:user:1487021741720076309> **Utility** — Info, avatar, purge, role & fun`
+    )
+    .setFooter({ text: 'Page 1 of 4  •  Overview' })
+    .setTimestamp(),
+
+  (guild) => new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setAuthor({ name: `${guild.name} — Moderation Commands`, iconURL: guild.iconURL() })
+    .setDescription(`<:moderator:1487021865682735225> Commands that require moderator permissions.\n\u200b`)
+    .addFields(
+      { name: '<:flash:1487027526394974218>  `.mute <user> [duration] [reason]`', value: '> Timeout a member. Duration accepts `s/m/h/d` (e.g. `1h`). Defaults to **24h**.' },
+      { name: '<:tick:1487030751550509066>  `.unmute <user>`', value: '> Remove a timeout from a member.' },
+      { name: '🔨  `.ban <user> [reason]`', value: '> Permanently ban a member from the server.' },
+      { name: '✅  `.unban <userID> [reason]`', value: '> Unban a previously banned user by their ID.' },
+      { name: '👟  `.kick <user> [reason]`', value: '> Kick a member from the server.' },
+      { name: '🔒  `.lock`', value: '> Prevent everyone from sending messages in the current channel.' },
+      { name: '🔓  `.unlock`', value: '> Restore message permissions in the current channel.' },
+      { name: '✏️  `.nick <user> <nickname>`', value: '> Change a member\'s nickname.' },
+      { name: '🎭  `.role <user> <role>`', value: '> Assign or remove a role from a member. Toggles automatically.' },
+      { name: '🛡️  `.as`', value: '> Toggle the anti-spam system on/off. Requires **Administrator**.' }
+    )
+    .setFooter({ text: 'Page 2 of 4  •  Moderation' })
+    .setTimestamp(),
+
+  (guild) => new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setAuthor({ name: `${guild.name} — Warning Commands`, iconURL: guild.iconURL() })
+    .setDescription(`<:warn:1487084599296135311> Track and manage member warnings.\n\u200b`)
+    .addFields(
+      { name: '<:warn:1487084599296135311>  `.warn <user> [reason]`', value: '> Issue a warning to a member. Warnings are tracked per server.' },
+      { name: '↩️  `.removewarn <user>`', value: '> Remove the most recent warning from a member.' },
+      { name: '🗑️  `.clearwarns <user>`', value: '> Clear **all** warnings for a member.' },
+      { name: '📋  `.warns [user]`', value: '> View warnings for a member. Leave blank to check your own.' },
+      {
+        name: '\u200b',
+        value: '**⚡ Auto-Punishment Thresholds**\n> `3 warnings` → Auto-muted for **6 hours**\n> `5 warnings` → Auto-kicked from the server'
+      }
+    )
+    .setFooter({ text: 'Page 3 of 4  •  Warnings' })
+    .setTimestamp(),
+
+  (guild) => new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setAuthor({ name: `${guild.name} — Utility Commands`, iconURL: guild.iconURL() })
+    .setDescription(`<:user:1487021741720076309> General-use commands available to everyone.\n\u200b`)
+    .addFields(
+      { name: '👤  `.userinfo [user]`  /  `.ui [user]`', value: '> View detailed info about a member — roles, dates, warnings & boost status.' },
+      { name: '🖼️  `.avatar [user]`  /  `.av [user]`', value: '> Display a user\'s avatar in full resolution.' },
+      { name: '🏠  `.serverinfo`  /  `.si`', value: '> View server info — members, channels, boost status & owner.' },
+      { name: '<:user:1487021741720076309>  `.membercount`  /  `.mc`', value: '> Display the current member count of the server.' },
+      { name: '🗑️  `.purge <amount>`', value: '> Bulk delete up to **100** messages. Requires **Manage Messages**.' },
+      { name: '🎲  `.choose <option1> or <option2>`', value: '> Let the bot pick between two or more options for you.' },
+      { name: '<:reason:1487022066644291614>  `.afk [reason]`', value: '> Set yourself as AFK. Others who ping you will be notified. Auto-removed when you chat.' },
+      { name: '🏓  `.ping`', value: '> Check if the bot is online.' }
+    )
+    .setFooter({ text: 'Page 4 of 4  •  Utility' })
+    .setTimestamp(),
+];
+
+function makeHelpRow(page, invokerId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`help_prev_${page}_${invokerId}`)
+      .setEmoji('◀️')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(page === 0),
+    new ButtonBuilder()
+      .setCustomId(`help_overview_${page}_${invokerId}`)
+      .setLabel('Overview')
+      .setStyle(page === 0 ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`help_next_${page}_${invokerId}`)
+      .setEmoji('▶️')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(page === helpPages.length - 1),
+    makeDeleteBtn(invokerId)
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}`);
-
   client.user.setPresence({
     status: 'online',
-    activities: [{
-      name: '.gg/wQvb6aqZWZ',
-      type: 4
-    }]
+    activities: [{ name: '.gg/wQvb6aqZWZ', type: 4 }]
   });
 });
 
-// 🔹 PREFIX COMMANDS
+// ─── PREFIX COMMANDS ─────────────────────────────────────────
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
   handleAntiSpam(message);
 
-  // ——— AFK: remove AFK if person types ———
+  // AFK: remove AFK if person types
   if (afkMap.has(message.author.id) && !message.content.startsWith(prefix)) {
     const data = afkMap.get(message.author.id);
     const pings = data.pings || 0;
@@ -225,7 +299,7 @@ client.on('messageCreate', async message => {
       .setTimestamp()] }).catch(() => {});
   }
 
-  // ——— AFK: notify if someone pings an AFK user ———
+  // AFK: notify if someone pings an AFK user
   if (message.mentions.users.size > 0) {
     for (const [userId, data] of afkMap) {
       if (message.mentions.users.has(userId)) {
@@ -246,12 +320,19 @@ client.on('messageCreate', async message => {
   const command = args[0].toLowerCase();
   const invokerId = message.author.id;
 
-  // PING
+  // ─── PING ────────────────────────────────────────────────
   if (command === 'ping') {
     return message.reply('Pong 🏓');
   }
 
-  // MUTE
+  // ─── HELP ────────────────────────────────────────────────
+  if (command === 'help') {
+    const embed = helpPages[0](message.guild);
+    const row = makeHelpRow(0, invokerId);
+    return message.channel.send({ embeds: [embed], components: [row] });
+  }
+
+  // ─── MUTE ────────────────────────────────────────────────
   if (command === 'mute') {
     try {
       if (!message.member.permissions.has('ModerateMembers')) {
@@ -272,8 +353,7 @@ client.on('messageCreate', async message => {
       }
 
       let timeArg = args[2];
-      let reason;
-      let ms;
+      let reason, ms;
 
       if (timeArg && /^[0-9]+[smhd]$/.test(timeArg)) {
         ms = parseTime(timeArg);
@@ -298,10 +378,7 @@ client.on('messageCreate', async message => {
         .setTimestamp();
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`unmute_btn_${member.id}_${invokerId}`)
-          .setLabel('Unmute')
-          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`unmute_btn_${member.id}_${invokerId}`).setLabel('Unmute').setStyle(ButtonStyle.Success),
         makeDeleteBtn(invokerId)
       );
 
@@ -326,12 +403,10 @@ client.on('messageCreate', async message => {
           { name: 'Reason', value: reason }
         ).setTimestamp());
 
-    } catch (err) {
-      console.error(err);
-      message.reply("Error muting user.");
-    }
+    } catch (err) { console.error(err); message.reply("Error muting user."); }
   }
-  // CHOOSE
+
+  // ─── CHOOSE ──────────────────────────────────────────────
   if (command === 'choose') {
     try {
       const input = args.slice(1).join(' ');
@@ -350,13 +425,10 @@ client.on('messageCreate', async message => {
         .setTimestamp();
 
       message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
-
-    } catch (err) {
-      console.error(err);
-      message.reply("Error choosing.");
-    }
+    } catch (err) { console.error(err); message.reply("Error choosing."); }
   }
-  // USERINFO
+
+  // ─── USERINFO ────────────────────────────────────────────
   if (command === 'userinfo' || command === 'ui') {
     try {
       let target;
@@ -375,9 +447,7 @@ client.on('messageCreate', async message => {
       const user = target.user;
       const joinedAt = Math.floor(target.joinedTimestamp / 1000);
       const createdAt = Math.floor(user.createdTimestamp / 1000);
-      const roles = target.roles.cache
-        .filter(r => r.id !== message.guild.id)
-        .sort((a, b) => b.position - a.position);
+      const roles = target.roles.cache.filter(r => r.id !== message.guild.id).sort((a, b) => b.position - a.position);
       const topRole = roles.first();
       const warns = loadWarns();
       const warnCount = (warns[`${message.guild.id}_${user.id}`] || []).length;
@@ -389,44 +459,21 @@ client.on('messageCreate', async message => {
         .setDescription(`Details about <@${user.id}>`)
         .setThumbnail(user.displayAvatarURL({ size: 256 }))
         .addFields(
-          {
-            name: "📋 Basic Info",
-            value: `**ID:** ${user.id}\n**Username:** ${user.username}\n**Display Name:** ${target.displayName}\n**Bot:** ${user.bot ? 'True' : 'False'}`
-          },
-          {
-            name: "📅 Timestamps",
-            value: `**Joined:** <t:${joinedAt}:R> • <t:${joinedAt}:f>\n**Created:** <t:${createdAt}:R> • <t:${createdAt}:f>`
-          },
-          {
-            name: "⚡ Boosting",
-            value: isBoosting ? 'Yes' : 'No',
-            inline: true
-          },
-          {
-            name: "<:warn:1487084599296135311> Warnings",
-            value: `${warnCount}`,
-            inline: true
-          },
-          {
-            name: `🎭 Roles [${roles.size}]`,
-            value: roles.size > 0 ? roles.map(r => `<@&${r.id}>`).join(', ') : 'None'
-          },
-          {
-            name: "🏆 Top Role",
-            value: topRole ? `<@&${topRole.id}>` : 'None'
-          }
+          { name: "📋 Basic Info", value: `**ID:** ${user.id}\n**Username:** ${user.username}\n**Display Name:** ${target.displayName}\n**Bot:** ${user.bot ? 'True' : 'False'}` },
+          { name: "📅 Timestamps", value: `**Joined:** <t:${joinedAt}:R> • <t:${joinedAt}:f>\n**Created:** <t:${createdAt}:R> • <t:${createdAt}:f>` },
+          { name: "⚡ Boosting", value: isBoosting ? 'Yes' : 'No', inline: true },
+          { name: "<:warn:1487084599296135311> Warnings", value: `${warnCount}`, inline: true },
+          { name: `🎭 Roles [${roles.size}]`, value: roles.size > 0 ? roles.map(r => `<@&${r.id}>`).join(', ') : 'None' },
+          { name: "🏆 Top Role", value: topRole ? `<@&${topRole.id}>` : 'None' }
         )
         .setFooter({ text: `Requested by ${message.member.displayName}`, iconURL: message.author.displayAvatarURL() })
         .setTimestamp();
 
       message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
-
-    } catch (err) {
-      console.error(err);
-      message.reply("Error fetching user info.");
-    }
+    } catch (err) { console.error(err); message.reply("Error fetching user info."); }
   }
-  // LOCK
+
+  // ─── LOCK ────────────────────────────────────────────────
   if (command === 'lock') {
     try {
       if (!message.member.permissions.has('ManageChannels')) {
@@ -436,9 +483,7 @@ client.on('messageCreate', async message => {
         });
       }
 
-      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
-        SendMessages: false
-      });
+      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
 
       const embed = new EmbedBuilder()
         .setColor(0xff3b3b)
@@ -457,14 +502,10 @@ client.on('messageCreate', async message => {
           { name: 'Channel', value: `<#${message.channel.id}>`, inline: true },
           { name: 'Moderator', value: `<@${invokerId}>`, inline: true }
         ).setTimestamp());
-
-    } catch (err) {
-      console.error(err);
-      message.reply("Error locking channel.");
-    }
+    } catch (err) { console.error(err); message.reply("Error locking channel."); }
   }
 
-  // UNLOCK
+  // ─── UNLOCK ──────────────────────────────────────────────
   if (command === 'unlock') {
     try {
       if (!message.member.permissions.has('ManageChannels')) {
@@ -474,9 +515,7 @@ client.on('messageCreate', async message => {
         });
       }
 
-      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
-        SendMessages: null
-      });
+      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: null });
 
       const embed = new EmbedBuilder()
         .setColor(0x57F287)
@@ -495,13 +534,10 @@ client.on('messageCreate', async message => {
           { name: 'Channel', value: `<#${message.channel.id}>`, inline: true },
           { name: 'Moderator', value: `<@${invokerId}>`, inline: true }
         ).setTimestamp());
-
-    } catch (err) {
-      console.error(err);
-      message.reply("Error unlocking channel.");
-    }
+    } catch (err) { console.error(err); message.reply("Error unlocking channel."); }
   }
-  // MEMBERCOUNT
+
+  // ─── MEMBERCOUNT ─────────────────────────────────────────
   if (command === 'membercount' || command === 'mc') {
     try {
       const guild = message.guild;
@@ -510,19 +546,14 @@ client.on('messageCreate', async message => {
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
         .setAuthor({ name: guild.name, iconURL: guild.iconURL() })
-        .addFields(
-          { name: "<:user:1487021741720076309> Total Members", value: `${guild.memberCount}`, inline: true }
-        )
+        .addFields({ name: "<:user:1487021741720076309> Total Members", value: `${guild.memberCount}`, inline: true })
         .setTimestamp();
 
       message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
-
-    } catch (err) {
-      console.error(err);
-      message.reply("Error fetching member count.");
-    }
+    } catch (err) { console.error(err); message.reply("Error fetching member count."); }
   }
-  // SERVERINFO
+
+  // ─── SERVERINFO ──────────────────────────────────────────
   if (command === 'serverinfo' || command === 'si') {
     try {
       const guild = message.guild;
@@ -539,36 +570,19 @@ client.on('messageCreate', async message => {
         .setAuthor({ name: guild.name, iconURL: guild.iconURL() })
         .setThumbnail(guild.iconURL({ size: 256 }))
         .addFields(
-          {
-            name: "📋 General Info",
-            value: `**Name:** ${guild.name}\n**Server ID:** ${guild.id}\n**Owner:** <@${owner.id}>\n**Created:** <t:${createdAt}:R> • <t:${createdAt}:f>`
-          },
-          {
-            name: "👥 Members & Roles",
-            value: `**Members:** ${guild.memberCount}\n**Roles:** ${guild.roles.cache.size}\n**Verification Level:** ${guild.verificationLevel.toString().toLowerCase()}`,
-            inline: true
-          },
-          {
-            name: "💎 Boost Status",
-            value: `**Level:** ${guild.premiumTier}\n**Boosts:** ${guild.premiumSubscriptionCount}`,
-            inline: true
-          },
-          {
-            name: "📁 Channels",
-            value: `**Text:** ${textChannels}\n**Voice:** ${voiceChannels}\n**Categories:** ${categories}`
-          }
+          { name: "📋 General Info", value: `**Name:** ${guild.name}\n**Server ID:** ${guild.id}\n**Owner:** <@${owner.id}>\n**Created:** <t:${createdAt}:R> • <t:${createdAt}:f>` },
+          { name: "👥 Members & Roles", value: `**Members:** ${guild.memberCount}\n**Roles:** ${guild.roles.cache.size}\n**Verification Level:** ${guild.verificationLevel.toString().toLowerCase()}`, inline: true },
+          { name: "💎 Boost Status", value: `**Level:** ${guild.premiumTier}\n**Boosts:** ${guild.premiumSubscriptionCount}`, inline: true },
+          { name: "📁 Channels", value: `**Text:** ${textChannels}\n**Voice:** ${voiceChannels}\n**Categories:** ${categories}` }
         )
         .setFooter({ text: `Requested by ${message.member.displayName}`, iconURL: message.author.displayAvatarURL() })
         .setTimestamp();
 
       message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
-
-    } catch (err) {
-      console.error(err);
-      message.reply("Error fetching server info.");
-    }
+    } catch (err) { console.error(err); message.reply("Error fetching server info."); }
   }
-  // AVATAR
+
+  // ─── AVATAR ──────────────────────────────────────────────
   if (command === 'avatar' || command === 'av') {
     try {
       let target;
@@ -591,13 +605,10 @@ client.on('messageCreate', async message => {
         .setTimestamp();
 
       message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
-
-    } catch (err) {
-      console.error(err);
-      message.reply("Error fetching avatar.");
-    }
+    } catch (err) { console.error(err); message.reply("Error fetching avatar."); }
   }
-// PURGE
+
+  // ─── PURGE ───────────────────────────────────────────────
   if (command === 'purge') {
     try {
       if (!message.member.permissions.has('ManageMessages')) {
@@ -633,13 +644,10 @@ client.on('messageCreate', async message => {
           { name: 'Amount', value: `${deleted.size}`, inline: true },
           { name: 'Channel', value: `<#${message.channel.id}>`, inline: true }
         ).setTimestamp());
-
-    } catch (err) {
-      console.error(err);
-      message.reply("Error purging messages. Messages older than 14 days can't be bulk deleted.");
-    }
+    } catch (err) { console.error(err); message.reply("Error purging messages. Messages older than 14 days can't be bulk deleted."); }
   }
-  // UNBAN
+
+  // ─── UNBAN ───────────────────────────────────────────────
   if (command === 'unban') {
     try {
       if (!message.member.permissions.has('BanMembers')) {
@@ -655,11 +663,8 @@ client.on('messageCreate', async message => {
       const reason = args.slice(2).join(" ") || "No reason provided";
 
       let user;
-      try {
-        user = await client.users.fetch(userId);
-      } catch {
-        return message.reply("Invalid user ID.");
-      }
+      try { user = await client.users.fetch(userId); }
+      catch { return message.reply("Invalid user ID."); }
 
       await message.guild.members.unban(userId, reason);
 
@@ -680,10 +685,7 @@ client.on('messageCreate', async message => {
         .setTimestamp();
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`ban_btn_${user.id}_${invokerId}`)
-          .setLabel('Ban')
-          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`ban_btn_${user.id}_${invokerId}`).setLabel('Ban').setStyle(ButtonStyle.Danger),
         makeDeleteBtn(invokerId)
       );
 
@@ -707,14 +709,10 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
           { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
           { name: 'Reason', value: reason }
         ).setTimestamp());
-
-    } catch (err) {
-      console.error(err);
-      message.reply("Error unbanning user.");
-    }
+    } catch (err) { console.error(err); message.reply("Error unbanning user."); }
   }
 
-  // UNMUTE
+  // ─── UNMUTE ──────────────────────────────────────────────
   if (command === 'unmute') {
     try {
       if (!message.member.permissions.has('ModerateMembers')) {
@@ -746,10 +744,7 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
         .setTimestamp();
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`mute_btn_${member.id}_${invokerId}`)
-          .setLabel('Mute')
-          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`mute_btn_${member.id}_${invokerId}`).setLabel('Mute').setStyle(ButtonStyle.Danger),
         makeDeleteBtn(invokerId)
       );
 
@@ -769,14 +764,10 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
           { name: 'User', value: `<@${member.id}>`, inline: true },
           { name: 'Moderator', value: `<@${invokerId}>`, inline: true }
         ).setTimestamp());
-
-    } catch (err) {
-      console.error(err);
-      message.reply("Error unmuting user.");
-    }
+    } catch (err) { console.error(err); message.reply("Error unmuting user."); }
   }
 
-  // NICK
+  // ─── NICK ────────────────────────────────────────────────
   if (command === 'nick') {
     try {
       if (!message.member.permissions.has('ManageNicknames')) {
@@ -820,14 +811,10 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
         .setTimestamp();
 
       message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
-
-    } catch (err) {
-      console.error(err);
-      message.reply("Error changing nickname. Make sure I have permission.");
-    }
+    } catch (err) { console.error(err); message.reply("Error changing nickname. Make sure I have permission."); }
   }
 
-  // BAN
+  // ─── BAN ─────────────────────────────────────────────────
   if (command === 'ban') {
     try {
       if (!message.member.permissions.has('BanMembers')) {
@@ -862,10 +849,7 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
         .setTimestamp();
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`unban_btn_${member.id}_${invokerId}`)
-          .setLabel('Unban')
-          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`unban_btn_${member.id}_${invokerId}`).setLabel('Unban').setStyle(ButtonStyle.Success),
         makeDeleteBtn(invokerId)
       );
 
@@ -887,14 +871,10 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
           { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
           { name: 'Reason', value: reason }
         ).setTimestamp());
-
-    } catch (err) {
-      console.error(err);
-      message.reply("Error banning user.");
-    }
+    } catch (err) { console.error(err); message.reply("Error banning user."); }
   }
 
-  // KICK
+  // ─── KICK ────────────────────────────────────────────────
   if (command === 'kick') {
     try {
       if (!message.member.permissions.has('KickMembers')) {
@@ -954,14 +934,10 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
           { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
           { name: 'Reason', value: reason }
         ).setTimestamp());
-
-    } catch (err) {
-      console.error(err);
-      message.reply("Error kicking user.");
-    }
+    } catch (err) { console.error(err); message.reply("Error kicking user."); }
   }
 
-  // WARN
+  // ─── WARN ────────────────────────────────────────────────
   if (command === 'warn') {
     try {
       if (!message.member.permissions.has('ModerateMembers')) {
@@ -1022,7 +998,6 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
           { name: 'Reason', value: reason }
         ).setTimestamp());
 
-      // auto punishments
       if (count === 3) {
         await member.timeout(6 * 60 * 60 * 1000);
         member.user.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b)
@@ -1046,7 +1021,7 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
     } catch (err) { console.error(err); message.reply("Error warning user."); }
   }
 
-  // CLEARWARNS
+  // ─── CLEARWARNS ──────────────────────────────────────────
   if (command === 'clearwarns') {
     try {
       if (!message.member.permissions.has('ModerateMembers')) {
@@ -1086,7 +1061,7 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
     } catch (err) { console.error(err); message.reply("Error clearing warnings."); }
   }
 
-  // REMOVEWARN
+  // ─── REMOVEWARN ──────────────────────────────────────────
   if (command === 'removewarn') {
     try {
       if (!message.member.permissions.has('ModerateMembers')) {
@@ -1128,7 +1103,7 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
     } catch (err) { console.error(err); message.reply("Error removing warning."); }
   }
 
-  // WARNS (self-check, usable by everyone)
+  // ─── WARNS ───────────────────────────────────────────────
   if (command === 'warns') {
     try {
       const member = args[1]
@@ -1159,7 +1134,7 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
     } catch (err) { console.error(err); message.reply("Error fetching warnings."); }
   }
 
-  // ROLE
+  // ─── ROLE ────────────────────────────────────────────────
   if (command === 'role') {
     try {
       if (!message.member.permissions.has('ManageRoles')) {
@@ -1192,21 +1167,15 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
           embeds: [new EmbedBuilder()
             .setColor(0xff3b3b)
             .setAuthor({ name: 'Missing Permissions' })
-            .setDescription(
-              `<:flash:1487027526394974218> **I cannot assign the role ${role.name}.**\n\n` +
-              `That role is equal to or higher than my highest role.`
-            )
+            .setDescription(`<:flash:1487027526394974218> **I cannot assign the role ${role.name}.**\n\nThat role is equal to or higher than my highest role.`)
             .setTimestamp()],
           components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
         });
       }
 
       const hasRole = member.roles.cache.has(role.id);
-      if (hasRole) {
-        await member.roles.remove(role);
-      } else {
-        await member.roles.add(role);
-      }
+      if (hasRole) { await member.roles.remove(role); }
+      else { await member.roles.add(role); }
 
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
@@ -1238,14 +1207,10 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
           { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
           { name: 'Role', value: role.name, inline: true }
         ).setTimestamp());
-
-    } catch (err) {
-      console.error(err);
-      message.reply("Error assigning role.");
-    }
+    } catch (err) { console.error(err); message.reply("Error assigning role."); }
   }
 
-  // ANTI-SPAM TOGGLE
+  // ─── ANTI-SPAM TOGGLE ────────────────────────────────────
   if (command === 'as') {
     if (!message.member.permissions.has('Administrator')) {
       return message.channel.send({
@@ -1271,7 +1236,7 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       .setTimestamp());
   }
 
-  // AFK
+  // ─── AFK ─────────────────────────────────────────────────
   if (command === 'afk') {
     const reason = args.slice(1).join(" ") || "I am AFK (Away from Keyboard) right now, talk to you later!";
     afkMap.set(message.author.id, { reason, since: Date.now() });
@@ -1286,6 +1251,9 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
   }
 
 });
+
+// ─────────────────────────────────────────────────────────────
+// BUTTON & MODAL INTERACTIONS
 // ─────────────────────────────────────────────────────────────
 client.on('interactionCreate', async interaction => {
 
@@ -1295,6 +1263,35 @@ client.on('interactionCreate', async interaction => {
     const parts = customId.split('_');
     const embeddedInvokerId = parts[parts.length - 1];
 
+    // ─── HELP NAV ─────────────────────────────────────────
+    if (customId.startsWith('help_')) {
+      if (interaction.user.id !== embeddedInvokerId) {
+        return interaction.reply({
+          embeds: [new EmbedBuilder()
+            .setColor(0xff3b3b)
+            .setAuthor({ name: 'Not Your Menu' })
+            .setDescription("<:flash:1487027526394974218> **This help menu belongs to someone else.**\n\nRun `.help` yourself to get your own.")
+            .setTimestamp()],
+          ephemeral: true
+        });
+      }
+
+      // customId: help_action_currentPage_invokerId
+      const action = parts[1];
+      const currentPage = parseInt(parts[2]);
+      let newPage = currentPage;
+
+      if (action === 'next') newPage = Math.min(currentPage + 1, helpPages.length - 1);
+      else if (action === 'prev') newPage = Math.max(currentPage - 1, 0);
+      else if (action === 'overview') newPage = 0;
+
+      const embed = helpPages[newPage](interaction.guild);
+      const row = makeHelpRow(newPage, embeddedInvokerId);
+
+      return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // ─── ALL OTHER BUTTONS ────────────────────────────────
     if (interaction.user.id !== embeddedInvokerId) {
       return interaction.reply({
         embeds: [new EmbedBuilder()
@@ -1306,89 +1303,39 @@ client.on('interactionCreate', async interaction => {
       });
     }
 
-    // DELETE BUTTON
     if (customId.startsWith('delete_msg_')) {
       return interaction.message.delete();
     }
 
-    // UNMUTE BUTTON
     if (customId.startsWith('unmute_btn_')) {
       const targetId = parts[2];
-      const modal = new ModalBuilder()
-        .setCustomId(`unmute_modal_${targetId}_${embeddedInvokerId}`)
-        .setTitle('Unmute Reason');
-
-      const reasonInput = new TextInputBuilder()
-        .setCustomId('reason')
-        .setLabel('Reason for Unmuting')
-        .setPlaceholder('Provide a reason to unmute or leave it blank.')
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(false);
-
+      const modal = new ModalBuilder().setCustomId(`unmute_modal_${targetId}_${embeddedInvokerId}`).setTitle('Unmute Reason');
+      const reasonInput = new TextInputBuilder().setCustomId('reason').setLabel('Reason for Unmuting').setPlaceholder('Provide a reason to unmute or leave it blank.').setStyle(TextInputStyle.Paragraph).setRequired(false);
       modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
       return interaction.showModal(modal);
     }
 
-    // MUTE BUTTON
     if (customId.startsWith('mute_btn_')) {
       const targetId = parts[2];
-      const modal = new ModalBuilder()
-        .setCustomId(`mute_modal_${targetId}_${embeddedInvokerId}`)
-        .setTitle('Mute Reason');
-
-      const reasonInput = new TextInputBuilder()
-        .setCustomId('reason')
-        .setLabel('Reason for Muting')
-        .setPlaceholder('Provide a reason to mute or leave it blank.')
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(false);
-
-      const durationInput = new TextInputBuilder()
-        .setCustomId('duration')
-        .setLabel('Duration (e.g. 10m, 1h, 1d)')
-        .setPlaceholder('Leave blank for 24h default')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false);
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(durationInput),
-        new ActionRowBuilder().addComponents(reasonInput)
-      );
+      const modal = new ModalBuilder().setCustomId(`mute_modal_${targetId}_${embeddedInvokerId}`).setTitle('Mute Reason');
+      const reasonInput = new TextInputBuilder().setCustomId('reason').setLabel('Reason for Muting').setPlaceholder('Provide a reason to mute or leave it blank.').setStyle(TextInputStyle.Paragraph).setRequired(false);
+      const durationInput = new TextInputBuilder().setCustomId('duration').setLabel('Duration (e.g. 10m, 1h, 1d)').setPlaceholder('Leave blank for 24h default').setStyle(TextInputStyle.Short).setRequired(false);
+      modal.addComponents(new ActionRowBuilder().addComponents(durationInput), new ActionRowBuilder().addComponents(reasonInput));
       return interaction.showModal(modal);
     }
 
-    // UNBAN BUTTON
     if (customId.startsWith('unban_btn_')) {
       const targetId = parts[2];
-      const modal = new ModalBuilder()
-        .setCustomId(`unban_modal_${targetId}_${embeddedInvokerId}`)
-        .setTitle('Unban Reason');
-
-      const reasonInput = new TextInputBuilder()
-        .setCustomId('reason')
-        .setLabel('Reason for Unbanning')
-        .setPlaceholder('Provide a reason to unban or leave it blank.')
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(false);
-
+      const modal = new ModalBuilder().setCustomId(`unban_modal_${targetId}_${embeddedInvokerId}`).setTitle('Unban Reason');
+      const reasonInput = new TextInputBuilder().setCustomId('reason').setLabel('Reason for Unbanning').setPlaceholder('Provide a reason to unban or leave it blank.').setStyle(TextInputStyle.Paragraph).setRequired(false);
       modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
       return interaction.showModal(modal);
     }
 
-    // BAN BUTTON
     if (customId.startsWith('ban_btn_')) {
       const targetId = parts[2];
-      const modal = new ModalBuilder()
-        .setCustomId(`ban_modal_${targetId}_${embeddedInvokerId}`)
-        .setTitle('Ban Reason');
-
-      const reasonInput = new TextInputBuilder()
-        .setCustomId('reason')
-        .setLabel('Reason for Banning')
-        .setPlaceholder('Provide a reason to ban or leave it blank.')
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(false);
-
+      const modal = new ModalBuilder().setCustomId(`ban_modal_${targetId}_${embeddedInvokerId}`).setTitle('Ban Reason');
+      const reasonInput = new TextInputBuilder().setCustomId('reason').setLabel('Reason for Banning').setPlaceholder('Provide a reason to ban or leave it blank.').setStyle(TextInputStyle.Paragraph).setRequired(false);
       modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
       return interaction.showModal(modal);
     }
@@ -1416,11 +1363,9 @@ client.on('interactionCreate', async interaction => {
 
     await interaction.deferUpdate();
 
-    // UNMUTE MODAL
     if (customId.startsWith('unmute_modal_')) {
       try {
         const member = await interaction.guild.members.fetch(targetId);
-
         await member.timeout(null);
 
         const updatedEmbed = new EmbedBuilder()
@@ -1449,11 +1394,9 @@ client.on('interactionCreate', async interaction => {
             { name: 'User', value: `<@${member.id}>`, inline: true },
             { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true }
           ).setTimestamp());
-
       } catch (err) { console.error(err); }
     }
 
-    // MUTE MODAL
     if (customId.startsWith('mute_modal_')) {
       try {
         const member = await interaction.guild.members.fetch(targetId);
@@ -1495,15 +1438,12 @@ client.on('interactionCreate', async interaction => {
             { name: 'Duration', value: timeArg, inline: true },
             { name: 'Reason', value: reason }
           ).setTimestamp());
-
       } catch (err) { console.error(err); }
     }
 
-    // UNBAN MODAL
     if (customId.startsWith('unban_modal_')) {
       try {
         const user = await client.users.fetch(targetId);
-
         await interaction.guild.members.unban(targetId, reason);
 
         let invite;
@@ -1543,15 +1483,12 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
             { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
             { name: 'Reason', value: reason }
           ).setTimestamp());
-
       } catch (err) { console.error(err); }
     }
 
-    // BAN MODAL
     if (customId.startsWith('ban_modal_')) {
       try {
         const member = await interaction.guild.members.fetch(targetId);
-
         await member.ban({ reason });
 
         const updatedEmbed = new EmbedBuilder()
@@ -1583,25 +1520,24 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
             { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
             { name: 'Reason', value: reason }
           ).setTimestamp());
-
       } catch (err) { console.error(err); }
     }
   }
 });
+
+// ─── GUILD MEMBER REMOVE ─────────────────────────────────────
 client.on('guildMemberRemove', async member => {
   try {
-    // skip if banned
-try {
-  const ban = await member.guild.bans.fetch(member.id);
-  if (ban) return;
-} catch {}
+    try {
+      const ban = await member.guild.bans.fetch(member.id);
+      if (ban) return;
+    } catch {}
 
-// skip if recently kicked
-try {
-  const logs = await member.guild.fetchAuditLogs({ type: 20, limit: 5 });
-  const kickEntry = logs.entries.find(e => e.target.id === member.id && Date.now() - e.createdTimestamp < 5000);
-  if (kickEntry) return;
-} catch {}
+    try {
+      const logs = await member.guild.fetchAuditLogs({ type: 20, limit: 5 });
+      const kickEntry = logs.entries.find(e => e.target.id === member.id && Date.now() - e.createdTimestamp < 5000);
+      if (kickEntry) return;
+    } catch {}
 
     let invite;
     try {
@@ -1610,19 +1546,19 @@ try {
     } catch { invite = null; }
 
     let dmStatus = "No";
-try {
-  await member.user.send({ embeds: [new EmbedBuilder()
-    .setColor(0x2b2d31)
-    .setAuthor({ name: member.guild.name, iconURL: member.guild.iconURL() })
-    .setDescription(
+    try {
+      await member.user.send({ embeds: [new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setAuthor({ name: member.guild.name, iconURL: member.guild.iconURL() })
+        .setDescription(
 `**Hey ${member.user.username}, we noticed you left.**
 
 Your presence in the server mattered and you'll be missed.`
-    )
-    .setTimestamp()] });
-  if (invite) await member.user.send(`<:Links:1487353216235737240> **Rejoin anytime:** ${invite.url}`);
-  dmStatus = "Yes";
-} catch { dmStatus = "No"; }
+        )
+        .setTimestamp()] });
+      if (invite) await member.user.send(`<:Links:1487353216235737240> **Rejoin anytime:** ${invite.url}`);
+      dmStatus = "Yes";
+    } catch { dmStatus = "No"; }
 
     sendLog(member.guild, new EmbedBuilder()
       .setColor(0x2b2d31)
@@ -1632,7 +1568,7 @@ Your presence in the server mattered and you'll be missed.`
         { name: "<:dm:1487024757239971913> DM Sent", value: dmStatus, inline: true }
       )
       .setTimestamp());
-
   } catch {}
 });
+
 client.login(process.env.TOKEN);
