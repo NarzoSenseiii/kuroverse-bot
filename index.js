@@ -1114,13 +1114,17 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
 client.on('guildMemberRemove', async member => {
   try {
     // skip if banned
-    const bans = await member.guild.bans.fetch();
-    if (bans.has(member.id)) return;
+try {
+  const ban = await member.guild.bans.fetch(member.id);
+  if (ban) return;
+} catch {}
 
-    // skip if recently kicked (audit log check)
-    const logs = await member.guild.fetchAuditLogs({ type: 20, limit: 5 });
-    const kickEntry = logs.entries.find(e => e.target.id === member.id && Date.now() - e.createdTimestamp < 5000);
-    if (kickEntry) return;
+// skip if recently kicked
+try {
+  const logs = await member.guild.fetchAuditLogs({ type: 20, limit: 5 });
+  const kickEntry = logs.entries.find(e => e.target.id === member.id && Date.now() - e.createdTimestamp < 5000);
+  if (kickEntry) return;
+} catch {}
 
     let invite;
     try {
