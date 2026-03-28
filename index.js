@@ -1111,5 +1111,48 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
     }
   }
 });
+client.on('guildMemberRemove', async member => {
+  try {
+    // skip if banned
+    const bans = await member.guild.bans.fetch();
+    if (bans.has(member.id)) return;
 
+    // skip if recently kicked (audit log check)
+    const logs = await member.guild.fetchAuditLogs({ type: 20, limit: 5 });
+    const kickEntry = logs.entries.find(e => e.target.id === member.id && Date.now() - e.createdTimestamp < 5000);
+    if (kickEntry) return;
+
+    let invite;
+    try {
+      const channel = member.guild.channels.cache.find(c => c.type === 0);
+      invite = await channel.createInvite({ maxAge: 604800, maxUses: 1 });
+    } catch { invite = null; }
+
+    let dmStatus = "No";
+    try {
+      await member.user.send({ embeds: [new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setAuthor({ name: member.guild.name, iconURL: member.guild.iconURL() })
+        .setDescription(
+`**Hey ${member.user.username}, we noticed you left.**
+
+Your presence in the server mattered and you'll be missed.
+
+${invite ? `<:Links:1487353216235737240> **Rejoin anytime:** ${invite.url}` : ''}`
+        )
+        .setTimestamp()] });
+      dmStatus = "Yes";
+    } catch { dmStatus = "No"; }
+
+    sendLog(member.guild, new EmbedBuilder()
+      .setColor(0x2b2d31)
+      .setAuthor({ name: `${member.user.tag} left the server`, iconURL: member.user.displayAvatarURL() })
+      .addFields(
+        { name: "<:user:1487021741720076309> User", value: `<@${member.id}>`, inline: true },
+        { name: "<:dm:1487024757239971913> DM Sent", value: dmStatus, inline: true }
+      )
+      .setTimestamp());
+
+  } catch {}
+});
 client.login(process.env.TOKEN);
