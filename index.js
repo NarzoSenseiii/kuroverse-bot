@@ -837,8 +837,13 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
         });
       }
 
-      // Assign the role
-      await member.roles.add(role);
+      // Toggle the role
+      const hasRole = member.roles.cache.has(role.id);
+      if (hasRole) {
+        await member.roles.remove(role);
+      } else {
+        await member.roles.add(role);
+      }
 
       // DM the user
       let dmStatus = "No";
@@ -847,7 +852,7 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
           embeds: [new EmbedBuilder()
             .setColor(0x57F287)
             .setDescription(
-`<:tick:1487030751550509066> **You have been assigned a role**
+`<:tick:1487030751550509066> **Your role has been ${hasRole ? 'removed' : 'assigned'}**
 
 **Server:** **${message.guild.name}**
 
@@ -861,7 +866,7 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
 
       // Log
       await sendLog(message.guild, new EmbedBuilder()
-        .setColor(0x5865F2).setTitle('🎭 Role Assigned')
+        .setColor(0x5865F2).setTitle(`🎭 Role ${hasRole ? 'Removed' : 'Assigned'}`)
         .addFields(
           { name: 'User', value: `<@${member.id}>`, inline: true },
           { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
@@ -871,7 +876,7 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
       // Channel embed
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
-        .setAuthor({ name: `${member.user.tag} has been assigned a role`, iconURL: member.user.displayAvatarURL() })
+        .setAuthor({ name: `${member.user.tag} has been ${hasRole ? 'removed from' : 'assigned'} a role`, iconURL: member.user.displayAvatarURL() })
         .addFields(
           { name: "<:user:1487021741720076309> User", value: `<@${member.id}>`, inline: true },
           { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>`, inline: true },
