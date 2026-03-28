@@ -227,6 +227,81 @@ client.on('messageCreate', async message => {
       message.reply("Error muting user.");
     }
   }
+  // LOCK
+  if (command === 'lock') {
+    try {
+      if (!message.member.permissions.has('ManageChannels')) {
+        return message.channel.send({
+          embeds: [noPermsEmbed('lock channels for')],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
+      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
+        SendMessages: false
+      });
+
+      const embed = new EmbedBuilder()
+        .setColor(0xff3b3b)
+        .setAuthor({ name: `#${message.channel.name} has been locked`, iconURL: message.guild.iconURL() })
+        .addFields(
+          { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>`, inline: true },
+          { name: "<:reason:1487022066644291614> Channel", value: `<#${message.channel.id}>`, inline: true }
+        )
+        .setTimestamp();
+
+      message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+
+      sendLog(message.guild, new EmbedBuilder()
+        .setColor(0xff3b3b).setTitle('🔒 Channel Locked')
+        .addFields(
+          { name: 'Channel', value: `<#${message.channel.id}>`, inline: true },
+          { name: 'Moderator', value: `<@${invokerId}>`, inline: true }
+        ).setTimestamp());
+
+    } catch (err) {
+      console.error(err);
+      message.reply("Error locking channel.");
+    }
+  }
+
+  // UNLOCK
+  if (command === 'unlock') {
+    try {
+      if (!message.member.permissions.has('ManageChannels')) {
+        return message.channel.send({
+          embeds: [noPermsEmbed('unlock channels for')],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
+      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
+        SendMessages: null
+      });
+
+      const embed = new EmbedBuilder()
+        .setColor(0x57F287)
+        .setAuthor({ name: `#${message.channel.name} has been unlocked`, iconURL: message.guild.iconURL() })
+        .addFields(
+          { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>`, inline: true },
+          { name: "<:reason:1487022066644291614> Channel", value: `<#${message.channel.id}>`, inline: true }
+        )
+        .setTimestamp();
+
+      message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+
+      sendLog(message.guild, new EmbedBuilder()
+        .setColor(0x57F287).setTitle('🔓 Channel Unlocked')
+        .addFields(
+          { name: 'Channel', value: `<#${message.channel.id}>`, inline: true },
+          { name: 'Moderator', value: `<@${invokerId}>`, inline: true }
+        ).setTimestamp());
+
+    } catch (err) {
+      console.error(err);
+      message.reply("Error unlocking channel.");
+    }
+  }
   // USERINFO
   if (command === 'userinfo' || command === 'ui') {
     try {
