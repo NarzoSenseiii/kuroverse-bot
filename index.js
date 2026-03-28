@@ -402,6 +402,13 @@ function makeHelpRow(page, invokerId) {
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}`);
+  const { execSync } = require('child_process');
+try {
+  console.log('ffmpeg path:', execSync('which ffmpeg').toString().trim());
+  console.log('ffmpeg version:', execSync('ffmpeg -version').toString().split('\n')[0]);
+} catch (e) {
+  console.log('ffmpeg not found in PATH:', e.message);
+}
   client.user.setPresence({
     status: 'online',
     activities: [{ name: '.gg/wQvb6aqZWZ', type: 4 }]
