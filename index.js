@@ -94,6 +94,108 @@ async function sendLog(guild, embed) {
   } catch (e) { console.error('Log error:', e); }
 }
 
+// 🛡️ ANTI-SPAM SYSTEM
+let antiSpamEnabled = false;
+const spamMap = new Map(); // userId -> { messages: [], muteLevel: 0, lastMuteEnd: 0 }
+const OWNER_ID = '1212375999132467270';
+
+async function handleAntiSpam(message) {
+  if (!antiSpamEnabled) return;
+  if (message.author.bot) return;
+  if (message.member?.permissions.has('Administrator')) return;
+
+  const userId = message.author.id;
+  const now = Date.now();
+
+  if (!spamMap.has(userId)) spamMap.set(userId, { messages: [], muteLevel: 0, lastMuteEnd: 0 });
+  const data = spamMap.get(userId);
+
+  // reset escalation if more than 1 min has passed since last mute ended
+  if (data.lastMuteEnd && now - data.lastMuteEnd > 60000) {
+    data.muteLevel = 0;
+  }
+
+  data.messages.push({ id: message.id, time: now });
+  data.messages = data.messages.filter(m => now - m.time < 5000);
+
+  if (data.messages.length < 5) return;
+
+  const msgIds = data.messages.map(m => m.id);
+  data.messages = [];
+
+  let muteDuration, label, deleteAll;
+  switch (data.muteLevel) {
+    case 0: muteDuration = 60000;    label = '1 minute';   deleteAll = false; break;
+    case 1: muteDuration = 600000;   label = '10 minutes'; deleteAll = true;  break;
+    case 2: muteDuration = 3600000;  label = '1 hour';     deleteAll = true;  break;
+    default: muteDuration = 43200000; label = '12 hours';  deleteAll = true;  break;
+  }
+
+  const isMax = muteDuration === 43200000;
+  data.muteLevel = isMax ? 0 : data.muteLevel + 1; // reset after 12hr
+  data.lastMuteEnd = now + muteDuration;
+
+  // delete messages
+  try {
+    const toDelete = deleteAll ? msgIds : msgIds.slice(1);
+    await message.channel.bulkDelete(toDelete, true).catch(() => {});
+  } catch {}
+
+  // mute
+  try { await message.member.timeout(muteDuration); } catch {}
+
+  // channel embed
+  message.channel.send({ embeds: [new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setAuthor({ name: `${message.author.tag} has been muted`, iconURL: message.author.displayAvatarURL() })
+    .addFields(
+      { name: "<:user:1487021741720076309> User", value: `<@${userId}>`, inline: true },
+      { name: "<:duration:1487022019273953300> Duration", value: label, inline: true },
+      { name: "<:reason:1487022066644291614> Reason", value: 'Anti-spam — sending messages too fast.' }
+    ).setTimestamp()] }).catch(() => {});
+
+  // DM user
+  message.author.send({ embeds: [new EmbedBuilder()
+    .setColor(0xff3b3b)
+    .setDescription(
+`<:flash:1487027526394974218> **You have been muted for spamming**
+
+**Server:** **${message.guild.name}**
+
+<:duration:1487022019273953300> Duration: ${label}
+<:reason:1487022066644291614> Reason: Anti-spam — sending messages too fast.`
+    ).setTimestamp()] }).catch(() => {});
+
+  // log
+  sendLog(message.guild, new EmbedBuilder()
+    .setColor(0xff3b3b).setTitle('🛡️ Anti-Spam Mute')
+    .addFields(
+      { name: 'User', value: `<@${userId}>`, inline: true },
+      { name: 'Duration', value: label, inline: true },
+      { name: 'Channel', value: `<#${message.channel.id}>`, inline: true },
+      { name: 'Escalation Level', value: `${data.muteLevel}`, inline: true }
+    ).setTimestamp());
+
+  // DM owner if 12hr mute
+  if (isMax) {
+    try {
+      const owner = await client.users.fetch(OWNER_ID);
+      owner.send({ embeds: [new EmbedBuilder()
+        .setColor(0xff3b3b)
+        .setAuthor({ name: '🛡️ Anti-Spam — 12 Hour Mute Triggered', iconURL: message.guild.iconURL() })
+        .setThumbnail(message.author.displayAvatarURL())
+        .setDescription(`A user has been auto-muted for **12 hours** after repeated spamming.`)
+        .addFields(
+          { name: '<:user:1487021741720076309> User', value: `<@${userId}> (${message.author.tag})`, inline: true },
+          { name: '<:reason:1487022066644291614> User ID', value: userId, inline: true },
+          { name: '<:duration:1487022019273953300> Duration', value: '12 hours', inline: true },
+          { name: '📁 Channel', value: `<#${message.channel.id}> in **${message.guild.name}**` },
+          { name: '🔗 Jump to Channel', value: `https://discord.com/channels/${message.guild.id}/${message.channel.id}` }
+        ).setTimestamp()] });
+    } catch {}
+  }
+}
+
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}`);
 
@@ -109,6 +211,8 @@ client.once('ready', async () => {
 // 🔹 PREFIX COMMANDS
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
+
+  handleAntiSpam(message);
 
   // ——— AFK: remove AFK if person types ———
   if (afkMap.has(message.author.id) && !message.content.startsWith(prefix)) {
@@ -969,6 +1073,32 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       console.error(err);
       message.reply("Error assigning role.");
     }
+  }
+
+  // ANTI-SPAM TOGGLE
+  if (command === 'as') {
+    if (!message.member.permissions.has('Administrator')) {
+      return message.channel.send({
+        embeds: [noPermsEmbed('toggle anti-spam for')],
+        components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+      });
+    }
+
+    antiSpamEnabled = !antiSpamEnabled;
+
+    const embed = new EmbedBuilder()
+      .setColor(antiSpamEnabled ? 0x57F287 : 0xff3b3b)
+      .setAuthor({ name: `Anti-Spam ${antiSpamEnabled ? 'Enabled' : 'Disabled'}`, iconURL: message.guild.iconURL() })
+      .setDescription(`<:moderator:1487021865682735225> **${message.member.displayName}** has turned anti-spam **${antiSpamEnabled ? 'on' : 'off'}**.`)
+      .setTimestamp();
+
+    message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+
+    sendLog(message.guild, new EmbedBuilder()
+      .setColor(antiSpamEnabled ? 0x57F287 : 0xff3b3b)
+      .setTitle(`🛡️ Anti-Spam ${antiSpamEnabled ? 'Enabled' : 'Disabled'}`)
+      .addFields({ name: 'Moderator', value: `<@${invokerId}>`, inline: true })
+      .setTimestamp());
   }
 
   // AFK
