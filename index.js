@@ -84,27 +84,6 @@ async function resolveMember(guild, arg) {
   catch { return null; }
 }
 
-// 🔺 Role hierarchy check embed
-function hierarchyEmbed(action) {
-  return new EmbedBuilder()
-    .setColor(0xff3b3b)
-    .setAuthor({ name: 'Missing Permissions' })
-    .setDescription(
-      `<:flash:1487027526394974218> **You cannot \`${action}\` this member.**\n\n` +
-      `Their role is equal to or higher than yours in the hierarchy.`
-    )
-    .setTimestamp();
-}
-
-// 🔍 Resolve member by mention or raw ID
-async function resolveMember(guild, arg) {
-  if (!arg) return null;
-  const idMatch = arg.match(/^<?@?!?(\d{17,19})>?$/);
-  if (!idMatch) return null;
-  try { return await guild.members.fetch(idMatch[1]); }
-  catch { return null; }
-}
-
 const LOG_CHANNEL_ID = '1484500454225477743';
 
 async function sendLog(guild, embed) {
@@ -273,7 +252,7 @@ client.on('messageCreate', async message => {
 <:moderator:1487021865682735225> Moderator: <@${invokerId}>  
 <:reason:1487022066644291614> Reason: ${reason}
 
-${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}
+${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
             )
             .setTimestamp()]
         });
@@ -537,19 +516,13 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}
 
       const reason = args.slice(2).join(" ") || "No reason provided";
 
-      await member.kick();
-
-      let dmStatus = "No";
-      try {
-        await member.user.send({
-          embeds: [new EmbedBuilder()
-            .setColor(0xff3b3b)
-            .setDescription(
-let invite;
+      let invite;
       try {
         const channel = message.guild.channels.cache.find(c => c.type === 0);
         invite = await channel.createInvite({ maxAge: 0, maxUses: 1 });
       } catch { invite = null; }
+
+      await member.kick();
 
       let dmStatus = "No";
       try {
@@ -565,11 +538,6 @@ let invite;
 <:reason:1487022066644291614> Reason: ${reason}
 
 ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
-            )
-            .setTimestamp()]
-        });
-        dmStatus = "Yes";
-      } catch { dmStatus = "No"; }
             )
             .setTimestamp()]
         });
@@ -821,7 +789,6 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
         });
       }
 
-      // Resolve member (arg[1]: mention or user ID)
       const member = await resolveMember(message.guild, args[1]);
       if (!member) return message.reply("Mention a user or provide a valid user ID.");
 
@@ -832,7 +799,6 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
         });
       }
 
-      // Resolve role (arg[2]: role mention <@&ID> or raw role ID)
       const roleArg = args[2];
       if (!roleArg) return message.reply("Provide a role mention or role ID.");
       const roleIdMatch = roleArg.match(/^<?@?&?(\d{17,19})>?$/);
@@ -840,7 +806,6 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       const role = message.guild.roles.cache.get(roleIdMatch[1]) || await message.guild.roles.fetch(roleIdMatch[1]).catch(() => null);
       if (!role) return message.reply("Role not found.");
 
-      // Check bot can assign this role (bot's highest role must be above the role)
       const botMember = await message.guild.members.fetchMe();
       if (botMember.roles.highest.position <= role.position) {
         return message.channel.send({
@@ -856,7 +821,6 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
         });
       }
 
-      // Toggle the role
       const hasRole = member.roles.cache.has(role.id);
       if (hasRole) {
         await member.roles.remove(role);
@@ -864,13 +828,12 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
         await member.roles.add(role);
       }
 
-      // DM the user
       let dmStatus = "No";
       try {
         await member.user.send({
           embeds: [new EmbedBuilder()
             .setColor(hasRole ? 0xff3b3b : 0x57F287)
-.setDescription(
+            .setDescription(
 `${hasRole ? '<:flash:1487027526394974218>' : '<:tick:1487030751550509066>'} **Your role has been ${hasRole ? 'removed' : 'assigned'}**
 
 **Server:** **${message.guild.name}**
@@ -883,7 +846,6 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
         dmStatus = "Yes";
       } catch { dmStatus = "No"; }
 
-      // Log
       await sendLog(message.guild, new EmbedBuilder()
         .setColor(0x5865F2).setTitle(`🎭 Role ${hasRole ? 'Removed' : 'Assigned'}`)
         .addFields(
@@ -892,7 +854,6 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
           { name: 'Role', value: role.name, inline: true }
         ).setTimestamp());
 
-      // Channel embed
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
         .setAuthor({ name: `${member.user.tag} has been ${hasRole ? 'removed from' : 'assigned'} a role`, iconURL: member.user.displayAvatarURL() })
