@@ -183,7 +183,7 @@ async function handleAntiSpam(message) {
 }
 
 // ─── HELP PAGES ──────────────────────────────────────────────
-// 0 = Overview, 1 = Moderation, 2 = Warnings, 3 = Utility
+// 0 = Overview, 1 = Utility, 2 = Moderation, 3 = Warnings
 const helpPages = [
   (guild) => new EmbedBuilder()
     .setColor(0x2b2d31)
@@ -191,11 +191,28 @@ const helpPages = [
     .setDescription(
       `Welcome to the help menu! Use the buttons below to browse categories.\n\n` +
       `**Prefix:** \`.\`  •  **Total Commands:** 20\n\n` +
+      `> <:user:1487021741720076309> **Utility** — Info, avatar, purge, role & fun\n` +
       `> <:moderator:1487021865682735225> **Moderation** — Ban, kick, mute, unmute & more\n` +
-      `> <:warn:1487084599296135311> **Warnings** — Warn, view, clear & remove warns\n` +
-      `> <:user:1487021741720076309> **Utility** — Info, avatar, purge, role & fun`
+      `> <:warn:1487084599296135311> **Warnings** — Warn, view, clear & remove warns`
     )
     .setFooter({ text: 'Page 1 of 4  •  Overview' })
+    .setTimestamp(),
+
+  (guild) => new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setAuthor({ name: `${guild.name} — Utility Commands`, iconURL: guild.iconURL() })
+    .setDescription(`<:user:1487021741720076309> General-use commands available to everyone.\n\u200b`)
+    .addFields(
+      { name: '👤  `.userinfo [user]`  /  `.ui [user]`', value: '> View detailed info about a member — roles, dates, warnings & boost status.' },
+      { name: '🖼️  `.avatar [user]`  /  `.av [user]`', value: '> Display a user\'s avatar in full resolution.' },
+      { name: '🏠  `.serverinfo`  /  `.si`', value: '> View server info — members, channels, boost status & owner.' },
+      { name: '<:user:1487021741720076309>  `.membercount`  /  `.mc`', value: '> Display the current member count of the server.' },
+      { name: '🗑️  `.purge <amount>`', value: '> Bulk delete up to **100** messages. Requires **Manage Messages**.' },
+      { name: '🎲  `.choose <option1> or <option2>`', value: '> Let the bot pick between two or more options for you.' },
+      { name: '<:reason:1487022066644291614>  `.afk [reason]`', value: '> Set yourself as AFK. Others who ping you will be notified. Auto-removed when you chat.' },
+      { name: '🏓  `.ping`', value: '> Check if the bot is online.' }
+    )
+    .setFooter({ text: 'Page 2 of 4  •  Utility' })
     .setTimestamp(),
 
   (guild) => new EmbedBuilder()
@@ -214,7 +231,7 @@ const helpPages = [
       { name: '🎭  `.role <user> <role>`', value: '> Assign or remove a role from a member. Toggles automatically.' },
       { name: '🛡️  `.as`', value: '> Toggle the anti-spam system on/off. Requires **Administrator**.' }
     )
-    .setFooter({ text: 'Page 2 of 4  •  Moderation' })
+    .setFooter({ text: 'Page 3 of 4  •  Moderation' })
     .setTimestamp(),
 
   (guild) => new EmbedBuilder()
@@ -231,24 +248,7 @@ const helpPages = [
         value: '**⚡ Auto-Punishment Thresholds**\n> `3 warnings` → Auto-muted for **6 hours**\n> `5 warnings` → Auto-kicked from the server'
       }
     )
-    .setFooter({ text: 'Page 3 of 4  •  Warnings' })
-    .setTimestamp(),
-
-  (guild) => new EmbedBuilder()
-    .setColor(0x2b2d31)
-    .setAuthor({ name: `${guild.name} — Utility Commands`, iconURL: guild.iconURL() })
-    .setDescription(`<:user:1487021741720076309> General-use commands available to everyone.\n\u200b`)
-    .addFields(
-      { name: '👤  `.userinfo [user]`  /  `.ui [user]`', value: '> View detailed info about a member — roles, dates, warnings & boost status.' },
-      { name: '🖼️  `.avatar [user]`  /  `.av [user]`', value: '> Display a user\'s avatar in full resolution.' },
-      { name: '🏠  `.serverinfo`  /  `.si`', value: '> View server info — members, channels, boost status & owner.' },
-      { name: '<:user:1487021741720076309>  `.membercount`  /  `.mc`', value: '> Display the current member count of the server.' },
-      { name: '🗑️  `.purge <amount>`', value: '> Bulk delete up to **100** messages. Requires **Manage Messages**.' },
-      { name: '🎲  `.choose <option1> or <option2>`', value: '> Let the bot pick between two or more options for you.' },
-      { name: '<:reason:1487022066644291614>  `.afk [reason]`', value: '> Set yourself as AFK. Others who ping you will be notified. Auto-removed when you chat.' },
-      { name: '🏓  `.ping`', value: '> Check if the bot is online.' }
-    )
-    .setFooter({ text: 'Page 4 of 4  •  Utility' })
+    .setFooter({ text: 'Page 4 of 4  •  Warnings' })
     .setTimestamp(),
 ];
 
@@ -327,8 +327,15 @@ client.on('messageCreate', async message => {
 
   // ─── HELP ────────────────────────────────────────────────
   if (command === 'help') {
-    const embed = helpPages[0](message.guild);
-    const row = makeHelpRow(0, invokerId);
+    const sub = args[1]?.toLowerCase();
+    // 0=Overview, 1=Utility, 2=Moderation, 3=Warnings
+    let page = 0;
+    if (sub === 'util' || sub === 'utility')                              page = 1;
+    else if (sub === 'mod' || sub === 'moderation')                       page = 2;
+    else if (sub === 'warn' || sub === 'warnings' || sub === 'warning')   page = 3;
+
+    const embed = helpPages[page](message.guild);
+    const row = makeHelpRow(page, invokerId);
     return message.channel.send({ embeds: [embed], components: [row] });
   }
 
