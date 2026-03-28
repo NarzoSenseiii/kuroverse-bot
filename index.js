@@ -23,6 +23,7 @@ const client = new Client({
 const prefix = ".";
 const fs = require('fs');
 const WARNS_FILE = './warnings.json';
+const afkMap = new Map(); // userId -> { reason, since }
 
 function loadWarns() {
   if (!fs.existsSync(WARNS_FILE)) return {};
@@ -107,7 +108,32 @@ client.once('ready', async () => {
 
 // 🔹 PREFIX COMMANDS
 client.on('messageCreate', async message => {
-  if (!message.content.startsWith(prefix) || message.author.bot) return;
+  if (message.author.bot) return;
+
+  // ——— AFK: remove AFK if person types ———
+  if (afkMap.has(message.author.id) && !message.content.startsWith(prefix)) {
+    afkMap.delete(message.author.id);
+    message.channel.send({ embeds: [new EmbedBuilder()
+      .setColor(0x2b2d31)
+      .setDescription(`<:tick:1487030751550509066> Welcome back <@${message.author.id}>! Your AFK has been removed.`)
+      .setTimestamp()] }).catch(() => {});
+  }
+
+  // ——— AFK: notify if someone pings an AFK user ———
+  if (message.mentions.users.size > 0) {
+    for (const [userId, data] of afkMap) {
+      if (message.mentions.users.has(userId)) {
+        const afkMember = message.guild?.members.cache.get(userId);
+        const name = afkMember?.displayName || 'That user';
+        message.channel.send({ embeds: [new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setDescription(`<:reason:1487022066644291614> **${name}** is AFK right now: ${data.reason}`)
+          .setTimestamp()] }).catch(() => {});
+      }
+    }
+  }
+
+  if (!message.content.startsWith(prefix)) return;
 
   const args = message.content.slice(prefix.length).split(' ');
   const command = args[0].toLowerCase();
@@ -805,10 +831,21 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
     }
   }
 
-});
+  // AFK
+  if (command === 'afk') {
+    const reason = args.slice(1).join(" ") || "I am AFK (Away from Keyboard) right now, talk to you later!";
+    afkMap.set(message.author.id, { reason, since: Date.now() });
 
-// ─────────────────────────────────────────────────────────────
-// 🔹 BUTTON & MODAL INTERACTIONS
+    const embed = new EmbedBuilder()
+      .setColor(0x2b2d31)
+      .setAuthor({ name: `${message.member.displayName} is now AFK`, iconURL: message.author.displayAvatarURL() })
+      .setDescription(`<:reason:1487022066644291614> ${reason}`)
+      .setTimestamp();
+
+    message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+  }
+
+});
 // ─────────────────────────────────────────────────────────────
 client.on('interactionCreate', async interaction => {
 
