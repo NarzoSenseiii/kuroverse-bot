@@ -227,6 +227,52 @@ client.on('messageCreate', async message => {
       message.reply("Error muting user.");
     }
   }
+  // SERVERINFO
+  if (command === 'serverinfo' || command === 'si') {
+    try {
+      const guild = message.guild;
+      await guild.fetch();
+
+      const owner = await guild.fetchOwner();
+      const textChannels = guild.channels.cache.filter(c => c.type === 0).size;
+      const voiceChannels = guild.channels.cache.filter(c => c.type === 2).size;
+      const categories = guild.channels.cache.filter(c => c.type === 4).size;
+      const createdAt = Math.floor(guild.createdTimestamp / 1000);
+
+      const embed = new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setAuthor({ name: guild.name, iconURL: guild.iconURL() })
+        .setThumbnail(guild.iconURL({ size: 256 }))
+        .addFields(
+          {
+            name: "📋 General Info",
+            value: `**Name:** ${guild.name}\n**Server ID:** ${guild.id}\n**Owner:** <@${owner.id}>\n**Created:** <t:${createdAt}:R> • <t:${createdAt}:f>`
+          },
+          {
+            name: "👥 Members & Roles",
+            value: `**Members:** ${guild.memberCount}\n**Roles:** ${guild.roles.cache.size}\n**Verification Level:** ${guild.verificationLevel.toString().toLowerCase()}`,
+            inline: true
+          },
+          {
+            name: "💎 Boost Status",
+            value: `**Level:** ${guild.premiumTier}\n**Boosts:** ${guild.premiumSubscriptionCount}`,
+            inline: true
+          },
+          {
+            name: "📁 Channels",
+            value: `**Text:** ${textChannels}\n**Voice:** ${voiceChannels}\n**Categories:** ${categories}`
+          }
+        )
+        .setFooter({ text: `Requested by ${message.member.displayName}`, iconURL: message.author.displayAvatarURL() })
+        .setTimestamp();
+
+      message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+
+    } catch (err) {
+      console.error(err);
+      message.reply("Error fetching server info.");
+    }
+  }
   // AVATAR
   if (command === 'avatar' || command === 'av') {
     try {
