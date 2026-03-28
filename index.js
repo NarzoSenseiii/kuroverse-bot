@@ -791,6 +791,103 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
       message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
     } catch (err) { console.error(err); message.reply("Error fetching warnings."); }
   }
+
+  // ROLE
+  if (command === 'role') {
+    try {
+      if (!message.member.permissions.has('ManageRoles')) {
+        return message.channel.send({
+          embeds: [noPermsEmbed('assign a role to')],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
+      // Resolve member (arg[1]: mention or user ID)
+      const member = await resolveMember(message.guild, args[1]);
+      if (!member) return message.reply("Mention a user or provide a valid user ID.");
+
+      if (message.member.roles.highest.position <= member.roles.highest.position) {
+        return message.channel.send({
+          embeds: [hierarchyEmbed('assign a role to')],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
+      // Resolve role (arg[2]: role mention <@&ID> or raw role ID)
+      const roleArg = args[2];
+      if (!roleArg) return message.reply("Provide a role mention or role ID.");
+      const roleIdMatch = roleArg.match(/^<?@?&?(\d{17,19})>?$/);
+      if (!roleIdMatch) return message.reply("Invalid role. Mention a role or provide a valid role ID.");
+      const role = message.guild.roles.cache.get(roleIdMatch[1]) || await message.guild.roles.fetch(roleIdMatch[1]).catch(() => null);
+      if (!role) return message.reply("Role not found.");
+
+      // Check bot can assign this role (bot's highest role must be above the role)
+      const botMember = await message.guild.members.fetchMe();
+      if (botMember.roles.highest.position <= role.position) {
+        return message.channel.send({
+          embeds: [new EmbedBuilder()
+            .setColor(0xff3b3b)
+            .setAuthor({ name: 'Missing Permissions' })
+            .setDescription(
+              `<:flash:1487027526394974218> **I cannot assign the role ${role.name}.**\n\n` +
+              `That role is equal to or higher than my highest role.`
+            )
+            .setTimestamp()],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
+      // Assign the role
+      await member.roles.add(role);
+
+      // DM the user
+      let dmStatus = "No";
+      try {
+        await member.user.send({
+          embeds: [new EmbedBuilder()
+            .setColor(0x57F287)
+            .setDescription(
+`<:tick:1487030751550509066> **You have been assigned a role**
+
+**Server:** **${message.guild.name}**
+
+<:moderator:1487021865682735225> Moderator: <@${invokerId}>
+<:reason:1487022066644291614> Role: ${role.name}`
+            )
+            .setTimestamp()]
+        });
+        dmStatus = "Yes";
+      } catch { dmStatus = "No"; }
+
+      // Log
+      await sendLog(message.guild, new EmbedBuilder()
+        .setColor(0x5865F2).setTitle('🎭 Role Assigned')
+        .addFields(
+          { name: 'User', value: `<@${member.id}>`, inline: true },
+          { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
+          { name: 'Role', value: role.name, inline: true }
+        ).setTimestamp());
+
+      // Channel embed
+      const embed = new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setAuthor({ name: `${member.user.tag} has been assigned a role`, iconURL: member.user.displayAvatarURL() })
+        .addFields(
+          { name: "<:user:1487021741720076309> User", value: `<@${member.id}>`, inline: true },
+          { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>`, inline: true },
+          { name: "<:reason:1487022066644291614> Role", value: `<@&${role.id}>`, inline: true },
+          { name: "<:dm:1487024757239971913> DM Sent", value: dmStatus, inline: true }
+        )
+        .setTimestamp();
+
+      message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+
+    } catch (err) {
+      console.error(err);
+      message.reply("Error assigning role.");
+    }
+  }
+
 });
 
 // ─────────────────────────────────────────────────────────────
