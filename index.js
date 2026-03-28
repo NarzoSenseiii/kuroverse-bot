@@ -112,10 +112,12 @@ client.on('messageCreate', async message => {
 
   // ——— AFK: remove AFK if person types ———
   if (afkMap.has(message.author.id) && !message.content.startsWith(prefix)) {
+    const data = afkMap.get(message.author.id);
+    const pings = data.pings || 0;
     afkMap.delete(message.author.id);
     message.channel.send({ embeds: [new EmbedBuilder()
       .setColor(0x2b2d31)
-      .setDescription(`<:tick:1487030751550509066> Welcome back <@${message.author.id}>! Your AFK has been removed.`)
+      .setDescription(`<:tick:1487030751550509066> Welcome back <@${message.author.id}>! Your AFK has been removed.${pings > 0 ? `\n<:reason:1487022066644291614> You got **${pings}** ping${pings === 1 ? '' : 's'} while you were away.` : ''}`)
       .setTimestamp()] }).catch(() => {});
   }
 
@@ -125,6 +127,7 @@ client.on('messageCreate', async message => {
       if (message.mentions.users.has(userId)) {
         const afkMember = message.guild?.members.cache.get(userId);
         const name = afkMember?.displayName || 'That user';
+        data.pings = (data.pings || 0) + 1;
         message.channel.send({ embeds: [new EmbedBuilder()
           .setColor(0x2b2d31)
           .setDescription(`<:reason:1487022066644291614> **${name}** is AFK right now: ${data.reason}`)
