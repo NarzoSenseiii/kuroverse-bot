@@ -153,34 +153,6 @@ client.on('messageCreate', async message => {
 
       await member.timeout(ms);
 
-      let dmStatus = "No";
-      try {
-        await member.user.send({
-          embeds: [new EmbedBuilder()
-            .setColor(0xff3b3b)
-            .setDescription(
-`<:flash:1487027526394974218> **You have been muted**
-
-**Server:** **${message.guild.name}**
-
-<:moderator:1487021865682735225> Moderator: <@${invokerId}>  
-<:duration:1487022019273953300> Duration: ${timeArg}  
-<:reason:1487022066644291614> Reason: ${reason}`
-            )
-            .setTimestamp()]
-        });
-        dmStatus = "Yes";
-      } catch (e) { dmStatus = "No"; }
-
-      await sendLog(message.guild, new EmbedBuilder()
-        .setColor(0xff3b3b).setTitle('🔇 Member Muted')
-        .addFields(
-          { name: 'User', value: `<@${member.id}>`, inline: true },
-          { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
-          { name: 'Duration', value: timeArg, inline: true },
-          { name: 'Reason', value: reason }
-        ).setTimestamp());
-
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
         .setAuthor({ name: `${member.user.tag} has been muted`, iconURL: member.user.displayAvatarURL() })
@@ -188,8 +160,7 @@ client.on('messageCreate', async message => {
           { name: "<:user:1487021741720076309> User", value: `<@${member.id}>`, inline: true },
           { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>`, inline: true },
           { name: "<:duration:1487022019273953300> Duration", value: timeArg, inline: true },
-          { name: "<:reason:1487022066644291614> Reason", value: reason },
-          { name: "<:dm:1487024757239971913> DM Sent", value: dmStatus, inline: true }
+          { name: "<:reason:1487022066644291614> Reason", value: reason }
         )
         .setTimestamp();
 
@@ -202,6 +173,25 @@ client.on('messageCreate', async message => {
       );
 
       message.channel.send({ embeds: [embed], components: [row] });
+
+      member.user.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription(
+`<:flash:1487027526394974218> **You have been muted**
+
+**Server:** **${message.guild.name}**
+
+<:moderator:1487021865682735225> Moderator: <@${invokerId}>  
+<:duration:1487022019273953300> Duration: ${timeArg}  
+<:reason:1487022066644291614> Reason: ${reason}`
+      ).setTimestamp()] }).catch(() => {});
+
+      sendLog(message.guild, new EmbedBuilder()
+        .setColor(0xff3b3b).setTitle('🔇 Member Muted')
+        .addFields(
+          { name: 'User', value: `<@${member.id}>`, inline: true },
+          { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
+          { name: 'Duration', value: timeArg, inline: true },
+          { name: 'Reason', value: reason }
+        ).setTimestamp());
 
     } catch (err) {
       console.error(err);
@@ -239,41 +229,12 @@ client.on('messageCreate', async message => {
         invite = await channel.createInvite({ maxAge: 0, maxUses: 1 });
       } catch { invite = null; }
 
-      let dmStatus = "No";
-      try {
-        await user.send({
-          embeds: [new EmbedBuilder()
-            .setColor(0x57F287)
-            .setDescription(
-`<:tick:1487030751550509066> **You have been unbanned**
-
-**Server:** **${message.guild.name}**
-
-<:moderator:1487021865682735225> Moderator: <@${invokerId}>  
-<:reason:1487022066644291614> Reason: ${reason}
-
-${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
-            )
-            .setTimestamp()]
-        });
-        dmStatus = "Yes";
-      } catch (e) { dmStatus = "No"; }
-
-      await sendLog(message.guild, new EmbedBuilder()
-        .setColor(0x57F287).setTitle('✅ Member Unbanned')
-        .addFields(
-          { name: 'User', value: `[${user.tag}](https://discord.com/users/${user.id})`, inline: true },
-          { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
-          { name: 'Reason', value: reason }
-        ).setTimestamp());
-
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
         .setAuthor({ name: `${user.tag} has been unbanned`, iconURL: user.displayAvatarURL() })
         .addFields(
           { name: "<:user:1487021741720076309> User", value: `[${user.tag}](https://discord.com/users/${user.id})`, inline: true },
           { name: "<:reason:1487022066644291614> Reason", value: reason, inline: true },
-          { name: "<:dm:1487024757239971913> DM Sent", value: dmStatus, inline: true },
           { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>` }
         )
         .setTimestamp();
@@ -287,6 +248,25 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       );
 
       message.channel.send({ embeds: [embed], components: [row] });
+
+      user.send({ embeds: [new EmbedBuilder().setColor(0x57F287).setDescription(
+`<:tick:1487030751550509066> **You have been unbanned**
+
+**Server:** **${message.guild.name}**
+
+<:moderator:1487021865682735225> Moderator: <@${invokerId}>  
+<:reason:1487022066644291614> Reason: ${reason}
+
+${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
+      ).setTimestamp()] }).catch(() => {});
+
+      sendLog(message.guild, new EmbedBuilder()
+        .setColor(0x57F287).setTitle('✅ Member Unbanned')
+        .addFields(
+          { name: 'User', value: `[${user.tag}](https://discord.com/users/${user.id})`, inline: true },
+          { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
+          { name: 'Reason', value: reason }
+        ).setTimestamp());
 
     } catch (err) {
       console.error(err);
@@ -316,37 +296,12 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
 
       await member.timeout(null);
 
-      let dmStatus = "No";
-      try {
-        await member.user.send({
-          embeds: [new EmbedBuilder()
-            .setColor(0x57F287)
-            .setDescription(
-`<:tick:1487030751550509066> **You have been unmuted**
-
-**Server:** **${message.guild.name}**
-
-<:moderator:1487021865682735225> Moderator: <@${invokerId}>`
-            )
-            .setTimestamp()]
-        });
-        dmStatus = "Yes";
-      } catch (e) { dmStatus = "No"; }
-
-      await sendLog(message.guild, new EmbedBuilder()
-        .setColor(0x57F287).setTitle('🔊 Member Unmuted')
-        .addFields(
-          { name: 'User', value: `<@${member.id}>`, inline: true },
-          { name: 'Moderator', value: `<@${invokerId}>`, inline: true }
-        ).setTimestamp());
-
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
         .setAuthor({ name: `${member.user.tag} has been unmuted`, iconURL: member.user.displayAvatarURL() })
         .addFields(
           { name: "<:user:1487021741720076309> User", value: `<@${member.id}>`, inline: true },
-          { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>`, inline: true },
-          { name: "<:dm:1487024757239971913> DM Sent", value: dmStatus, inline: true }
+          { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>`, inline: true }
         )
         .setTimestamp();
 
@@ -359,6 +314,21 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       );
 
       message.channel.send({ embeds: [embed], components: [row] });
+
+      member.user.send({ embeds: [new EmbedBuilder().setColor(0x57F287).setDescription(
+`<:tick:1487030751550509066> **You have been unmuted**
+
+**Server:** **${message.guild.name}**
+
+<:moderator:1487021865682735225> Moderator: <@${invokerId}>`
+      ).setTimestamp()] }).catch(() => {});
+
+      sendLog(message.guild, new EmbedBuilder()
+        .setColor(0x57F287).setTitle('🔊 Member Unmuted')
+        .addFields(
+          { name: 'User', value: `<@${member.id}>`, inline: true },
+          { name: 'Moderator', value: `<@${invokerId}>`, inline: true }
+        ).setTimestamp());
 
     } catch (err) {
       console.error(err);
@@ -441,39 +411,12 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
 
       await member.ban({ reason });
 
-      let dmStatus = "No";
-      try {
-        await member.user.send({
-          embeds: [new EmbedBuilder()
-            .setColor(0xff3b3b)
-            .setDescription(
-`<:flash:1487027526394974218> **You have been banned**
-
-**Server:** **${message.guild.name}**
-
-<:moderator:1487021865682735225> Moderator: <@${invokerId}>  
-<:reason:1487022066644291614> Reason: ${reason}`
-            )
-            .setTimestamp()]
-        });
-        dmStatus = "Yes";
-      } catch (e) { dmStatus = "No"; }
-
-      await sendLog(message.guild, new EmbedBuilder()
-        .setColor(0xff3b3b).setTitle('🔨 Member Banned')
-        .addFields(
-          { name: 'User', value: `<@${member.id}>`, inline: true },
-          { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
-          { name: 'Reason', value: reason }
-        ).setTimestamp());
-
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
         .setAuthor({ name: `${member.user.tag} has been banned`, iconURL: member.user.displayAvatarURL() })
         .addFields(
           { name: "<:user:1487021741720076309> User", value: `<@${member.id}>`, inline: true },
           { name: "<:reason:1487022066644291614> Reason", value: reason, inline: true },
-          { name: "<:dm:1487024757239971913> DM Sent", value: dmStatus, inline: true },
           { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>` }
         )
         .setTimestamp();
@@ -487,6 +430,23 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       );
 
       message.channel.send({ embeds: [embed], components: [row] });
+
+      member.user.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription(
+`<:flash:1487027526394974218> **You have been banned**
+
+**Server:** **${message.guild.name}**
+
+<:moderator:1487021865682735225> Moderator: <@${invokerId}>  
+<:reason:1487022066644291614> Reason: ${reason}`
+      ).setTimestamp()] }).catch(() => {});
+
+      sendLog(message.guild, new EmbedBuilder()
+        .setColor(0xff3b3b).setTitle('🔨 Member Banned')
+        .addFields(
+          { name: 'User', value: `<@${member.id}>`, inline: true },
+          { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
+          { name: 'Reason', value: reason }
+        ).setTimestamp());
 
     } catch (err) {
       console.error(err);
@@ -524,12 +484,19 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
 
       await member.kick();
 
-      let dmStatus = "No";
-      try {
-        await member.user.send({
-          embeds: [new EmbedBuilder()
-            .setColor(0xff3b3b)
-            .setDescription(
+      const embed = new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setAuthor({ name: `${member.user.tag} has been kicked`, iconURL: member.user.displayAvatarURL() })
+        .addFields(
+          { name: "<:user:1487021741720076309> User", value: `<@${member.id}>`, inline: true },
+          { name: "<:reason:1487022066644291614> Reason", value: reason, inline: true },
+          { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>` }
+        )
+        .setTimestamp();
+
+      message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+
+      member.user.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription(
 `<:flash:1487027526394974218> **You have been kicked**
 
 **Server:** **${message.guild.name}**
@@ -538,32 +505,15 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
 <:reason:1487022066644291614> Reason: ${reason}
 
 ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
-            )
-            .setTimestamp()]
-        });
-        dmStatus = "Yes";
-      } catch (e) { dmStatus = "No"; }
+      ).setTimestamp()] }).catch(() => {});
 
-      await sendLog(message.guild, new EmbedBuilder()
+      sendLog(message.guild, new EmbedBuilder()
         .setColor(0xFFA500).setTitle('👟 Member Kicked')
         .addFields(
           { name: 'User', value: `<@${member.id}>`, inline: true },
           { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
           { name: 'Reason', value: reason }
         ).setTimestamp());
-
-      const embed = new EmbedBuilder()
-        .setColor(0x2b2d31)
-        .setAuthor({ name: `${member.user.tag} has been kicked`, iconURL: member.user.displayAvatarURL() })
-        .addFields(
-          { name: "<:user:1487021741720076309> User", value: `<@${member.id}>`, inline: true },
-          { name: "<:reason:1487022066644291614> Reason", value: reason, inline: true },
-          { name: "<:dm:1487024757239971913> DM Sent", value: dmStatus, inline: true },
-          { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>` }
-        )
-        .setTimestamp();
-
-      message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
 
     } catch (err) {
       console.error(err);
@@ -601,48 +551,6 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
 
       const count = warns[key].length;
 
-      try {
-        await member.user.send({
-          embeds: [new EmbedBuilder()
-            .setColor(0xFFA500)
-            .setDescription(
-`<:warn:1487084599296135311> **You have been warned**
-
-**Server:** **${message.guild.name}**
-
-<:moderator:1487021865682735225> Moderator: <@${invokerId}>
-<:reason:1487022066644291614> Reason: ${reason}
-<:warn:1487084599296135311> Total Warnings: **${count}**`
-            ).setTimestamp()]
-        });
-      } catch {}
-
-      // auto punishments
-      if (count === 3) {
-        await member.timeout(6 * 60 * 60 * 1000);
-        await sendLog(message.guild, new EmbedBuilder()
-          .setColor(0xff3b3b).setTitle('<:muteee:1487085617119756358> Auto-Muted (3 Warnings)')
-          .addFields(
-            { name: 'User', value: `<@${member.id}>`, inline: true },
-            { name: 'Duration', value: '6 hours', inline: true }
-          ).setTimestamp());
-        try {
-          await member.user.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b)
-            .setDescription(`<:muteee:1487085617119756358> **You have been auto-muted for 6 hours** in **${message.guild.name}** for reaching 3 warnings.`).setTimestamp()] });
-        } catch {}
-      }
-
-      if (count === 5) {
-        try {
-          await member.user.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b)
-            .setDescription(`<:flashwarn:1487025332841091182> **You have been auto-kicked** from **${message.guild.name}** for reaching 5 warnings.`).setTimestamp()] });
-        } catch {}
-        await member.kick("5 warnings reached");
-        await sendLog(message.guild, new EmbedBuilder()
-          .setColor(0xff3b3b).setTitle('<:flashwarn:1487025332841091182> Auto-Kicked (5 Warnings)')
-          .addFields({ name: 'User', value: `<@${member.id}>`, inline: true }).setTimestamp());
-      }
-
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
         .setAuthor({ name: `${member.user.tag} has been warned`, iconURL: member.user.displayAvatarURL() })
@@ -653,7 +561,19 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
           { name: "<:reason:1487022066644291614> Reason", value: reason }
         ).setTimestamp();
 
-      await sendLog(message.guild, new EmbedBuilder()
+      message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+
+      member.user.send({ embeds: [new EmbedBuilder().setColor(0xFFA500).setDescription(
+`<:warn:1487084599296135311> **You have been warned**
+
+**Server:** **${message.guild.name}**
+
+<:moderator:1487021865682735225> Moderator: <@${invokerId}>
+<:reason:1487022066644291614> Reason: ${reason}
+<:warn:1487084599296135311> Total Warnings: **${count}**`
+      ).setTimestamp()] }).catch(() => {});
+
+      sendLog(message.guild, new EmbedBuilder()
         .setColor(0xFFA500).setTitle('<:warn:1487084599296135311> Member Warned')
         .addFields(
           { name: 'User', value: `<@${member.id}>`, inline: true },
@@ -662,7 +582,27 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
           { name: 'Reason', value: reason }
         ).setTimestamp());
 
-      message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+      // auto punishments
+      if (count === 3) {
+        await member.timeout(6 * 60 * 60 * 1000);
+        member.user.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b)
+          .setDescription(`<:muteee:1487085617119756358> **You have been auto-muted for 6 hours** in **${message.guild.name}** for reaching 3 warnings.`).setTimestamp()] }).catch(() => {});
+        sendLog(message.guild, new EmbedBuilder()
+          .setColor(0xff3b3b).setTitle('<:muteee:1487085617119756358> Auto-Muted (3 Warnings)')
+          .addFields(
+            { name: 'User', value: `<@${member.id}>`, inline: true },
+            { name: 'Duration', value: '6 hours', inline: true }
+          ).setTimestamp());
+      }
+
+      if (count === 5) {
+        await member.kick("5 warnings reached");
+        member.user.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b)
+          .setDescription(`<:flashwarn:1487025332841091182> **You have been auto-kicked** from **${message.guild.name}** for reaching 5 warnings.`).setTimestamp()] }).catch(() => {});
+        sendLog(message.guild, new EmbedBuilder()
+          .setColor(0xff3b3b).setTitle('<:flashwarn:1487025332841091182> Auto-Kicked (5 Warnings)')
+          .addFields({ name: 'User', value: `<@${member.id}>`, inline: true }).setTimestamp());
+      }
     } catch (err) { console.error(err); message.reply("Error warning user."); }
   }
 
@@ -828,44 +768,36 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
         await member.roles.add(role);
       }
 
-      let dmStatus = "No";
-      try {
-        await member.user.send({
-          embeds: [new EmbedBuilder()
-            .setColor(hasRole ? 0xff3b3b : 0x57F287)
-            .setDescription(
-`${hasRole ? '<:flash:1487027526394974218>' : '<:tick:1487030751550509066>'} **Your role has been ${hasRole ? 'removed' : 'assigned'}**
-
-**Server:** **${message.guild.name}**
-
-<:moderator:1487021865682735225> Moderator: <@${invokerId}>
-<:reason:1487022066644291614> Role: ${role.name}`
-            )
-            .setTimestamp()]
-        });
-        dmStatus = "Yes";
-      } catch { dmStatus = "No"; }
-
-      await sendLog(message.guild, new EmbedBuilder()
-        .setColor(0x5865F2).setTitle(`🎭 Role ${hasRole ? 'Removed' : 'Assigned'}`)
-        .addFields(
-          { name: 'User', value: `<@${member.id}>`, inline: true },
-          { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
-          { name: 'Role', value: role.name, inline: true }
-        ).setTimestamp());
-
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
         .setAuthor({ name: `${member.user.tag} has been ${hasRole ? 'removed from' : 'assigned'} a role`, iconURL: member.user.displayAvatarURL() })
         .addFields(
           { name: "<:user:1487021741720076309> User", value: `<@${member.id}>`, inline: true },
           { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>`, inline: true },
-          { name: "<:reason:1487022066644291614> Role", value: `<@&${role.id}>`, inline: true },
-          { name: "<:dm:1487024757239971913> DM Sent", value: dmStatus, inline: true }
+          { name: "<:reason:1487022066644291614> Role", value: `<@&${role.id}>`, inline: true }
         )
         .setTimestamp();
 
       message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+
+      member.user.send({ embeds: [new EmbedBuilder()
+        .setColor(hasRole ? 0xff3b3b : 0x57F287)
+        .setDescription(
+`${hasRole ? '<:flash:1487027526394974218>' : '<:tick:1487030751550509066>'} **Your role has been ${hasRole ? 'removed' : 'assigned'}**
+
+**Server:** **${message.guild.name}**
+
+<:moderator:1487021865682735225> Moderator: <@${invokerId}>
+<:reason:1487022066644291614> Role: ${role.name}`
+        ).setTimestamp()] }).catch(() => {});
+
+      sendLog(message.guild, new EmbedBuilder()
+        .setColor(0x5865F2).setTitle(`🎭 Role ${hasRole ? 'Removed' : 'Assigned'}`)
+        .addFields(
+          { name: 'User', value: `<@${member.id}>`, inline: true },
+          { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
+          { name: 'Role', value: role.name, inline: true }
+        ).setTimestamp());
 
     } catch (err) {
       console.error(err);
@@ -1014,42 +946,32 @@ client.on('interactionCreate', async interaction => {
 
         await member.timeout(null);
 
-        let dmStatus = "No";
-        try {
-          await member.user.send({
-            embeds: [new EmbedBuilder()
-              .setColor(0x57F287)
-              .setDescription(
-`<:tick:1487030751550509066> **You have been unmuted**
-
-**Server:** **${interaction.guild.name}**
-
-<:moderator:1487021865682735225> Moderator: <@${interaction.user.id}>`
-              )
-              .setTimestamp()]
-          });
-          dmStatus = "Yes";
-        } catch { dmStatus = "No"; }
-
-        await sendLog(interaction.guild, new EmbedBuilder()
-          .setColor(0x57F287).setTitle('🔊 Member Unmuted (via button)')
-          .addFields(
-            { name: 'User', value: `<@${member.id}>`, inline: true },
-            { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true }
-          ).setTimestamp());
-
         const updatedEmbed = new EmbedBuilder()
           .setColor(0x2b2d31)
           .setAuthor({ name: `${member.user.tag} has been unmuted`, iconURL: member.user.displayAvatarURL() })
           .addFields(
             { name: "<:user:1487021741720076309> User", value: `<@${member.id}>`, inline: true },
-            { name: "<:moderator:1487021865682735225> Moderator", value: `<@${interaction.user.id}>`, inline: true },
-            { name: "<:dm:1487024757239971913> DM Sent", value: dmStatus, inline: true }
+            { name: "<:moderator:1487021865682735225> Moderator", value: `<@${interaction.user.id}>`, inline: true }
           )
           .setTimestamp();
 
         const deleteRow = new ActionRowBuilder().addComponents(makeDeleteBtn(embeddedInvokerId));
         await interaction.message.edit({ embeds: [updatedEmbed], components: [deleteRow] });
+
+        member.user.send({ embeds: [new EmbedBuilder().setColor(0x57F287).setDescription(
+`<:tick:1487030751550509066> **You have been unmuted**
+
+**Server:** **${interaction.guild.name}**
+
+<:moderator:1487021865682735225> Moderator: <@${interaction.user.id}>`
+        ).setTimestamp()] }).catch(() => {});
+
+        sendLog(interaction.guild, new EmbedBuilder()
+          .setColor(0x57F287).setTitle('🔊 Member Unmuted (via button)')
+          .addFields(
+            { name: 'User', value: `<@${member.id}>`, inline: true },
+            { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true }
+          ).setTimestamp());
 
       } catch (err) { console.error(err); }
     }
@@ -1064,34 +986,6 @@ client.on('interactionCreate', async interaction => {
 
         await member.timeout(ms);
 
-        let dmStatus = "No";
-        try {
-          await member.user.send({
-            embeds: [new EmbedBuilder()
-              .setColor(0xff3b3b)
-              .setDescription(
-`<:flash:1487027526394974218> **You have been muted**
-
-**Server:** **${interaction.guild.name}**
-
-<:moderator:1487021865682735225> Moderator: <@${interaction.user.id}>  
-<:duration:1487022019273953300> Duration: ${timeArg}  
-<:reason:1487022066644291614> Reason: ${reason}`
-              )
-              .setTimestamp()]
-          });
-          dmStatus = "Yes";
-        } catch { dmStatus = "No"; }
-
-        await sendLog(interaction.guild, new EmbedBuilder()
-          .setColor(0xff3b3b).setTitle('🔇 Member Muted (via button)')
-          .addFields(
-            { name: 'User', value: `<@${member.id}>`, inline: true },
-            { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
-            { name: 'Duration', value: timeArg, inline: true },
-            { name: 'Reason', value: reason }
-          ).setTimestamp());
-
         const updatedEmbed = new EmbedBuilder()
           .setColor(0x2b2d31)
           .setAuthor({ name: `${member.user.tag} has been muted`, iconURL: member.user.displayAvatarURL() })
@@ -1099,13 +993,31 @@ client.on('interactionCreate', async interaction => {
             { name: "<:user:1487021741720076309> User", value: `<@${member.id}>`, inline: true },
             { name: "<:moderator:1487021865682735225> Moderator", value: `<@${interaction.user.id}>`, inline: true },
             { name: "<:duration:1487022019273953300> Duration", value: timeArg, inline: true },
-            { name: "<:reason:1487022066644291614> Reason", value: reason },
-            { name: "<:dm:1487024757239971913> DM Sent", value: dmStatus, inline: true }
+            { name: "<:reason:1487022066644291614> Reason", value: reason }
           )
           .setTimestamp();
 
         const deleteRow = new ActionRowBuilder().addComponents(makeDeleteBtn(embeddedInvokerId));
         await interaction.message.edit({ embeds: [updatedEmbed], components: [deleteRow] });
+
+        member.user.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription(
+`<:flash:1487027526394974218> **You have been muted**
+
+**Server:** **${interaction.guild.name}**
+
+<:moderator:1487021865682735225> Moderator: <@${interaction.user.id}>  
+<:duration:1487022019273953300> Duration: ${timeArg}  
+<:reason:1487022066644291614> Reason: ${reason}`
+        ).setTimestamp()] }).catch(() => {});
+
+        sendLog(interaction.guild, new EmbedBuilder()
+          .setColor(0xff3b3b).setTitle('🔇 Member Muted (via button)')
+          .addFields(
+            { name: 'User', value: `<@${member.id}>`, inline: true },
+            { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
+            { name: 'Duration', value: timeArg, inline: true },
+            { name: 'Reason', value: reason }
+          ).setTimestamp());
 
       } catch (err) { console.error(err); }
     }
@@ -1123,12 +1035,20 @@ client.on('interactionCreate', async interaction => {
           invite = await channel.createInvite({ maxAge: 0, maxUses: 1 });
         } catch { invite = null; }
 
-        let dmStatus = "No";
-        try {
-          await user.send({
-            embeds: [new EmbedBuilder()
-              .setColor(0x57F287)
-              .setDescription(
+        const updatedEmbed = new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setAuthor({ name: `${user.tag} has been unbanned`, iconURL: user.displayAvatarURL() })
+          .addFields(
+            { name: "<:user:1487021741720076309> User", value: `[${user.tag}](https://discord.com/users/${user.id})`, inline: true },
+            { name: "<:reason:1487022066644291614> Reason", value: reason, inline: true },
+            { name: "<:moderator:1487021865682735225> Moderator", value: `<@${interaction.user.id}>` }
+          )
+          .setTimestamp();
+
+        const deleteRow = new ActionRowBuilder().addComponents(makeDeleteBtn(embeddedInvokerId));
+        await interaction.message.edit({ embeds: [updatedEmbed], components: [deleteRow] });
+
+        user.send({ embeds: [new EmbedBuilder().setColor(0x57F287).setDescription(
 `<:tick:1487030751550509066> **You have been unbanned**
 
 **Server:** **${interaction.guild.name}**
@@ -1137,33 +1057,15 @@ client.on('interactionCreate', async interaction => {
 <:reason:1487022066644291614> Reason: ${reason}
 
 ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
-              )
-              .setTimestamp()]
-          });
-          dmStatus = "Yes";
-        } catch { dmStatus = "No"; }
+        ).setTimestamp()] }).catch(() => {});
 
-        await sendLog(interaction.guild, new EmbedBuilder()
+        sendLog(interaction.guild, new EmbedBuilder()
           .setColor(0x57F287).setTitle('✅ Member Unbanned (via button)')
           .addFields(
             { name: 'User', value: `[${user.tag}](https://discord.com/users/${user.id})`, inline: true },
             { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
             { name: 'Reason', value: reason }
           ).setTimestamp());
-
-        const updatedEmbed = new EmbedBuilder()
-          .setColor(0x2b2d31)
-          .setAuthor({ name: `${user.tag} has been unbanned`, iconURL: user.displayAvatarURL() })
-          .addFields(
-            { name: "<:user:1487021741720076309> User", value: `[${user.tag}](https://discord.com/users/${user.id})`, inline: true },
-            { name: "<:reason:1487022066644291614> Reason", value: reason, inline: true },
-            { name: "<:dm:1487024757239971913> DM Sent", value: dmStatus, inline: true },
-            { name: "<:moderator:1487021865682735225> Moderator", value: `<@${interaction.user.id}>` }
-          )
-          .setTimestamp();
-
-        const deleteRow = new ActionRowBuilder().addComponents(makeDeleteBtn(embeddedInvokerId));
-        await interaction.message.edit({ embeds: [updatedEmbed], components: [deleteRow] });
 
       } catch (err) { console.error(err); }
     }
@@ -1175,45 +1077,35 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
 
         await member.ban({ reason });
 
-        let dmStatus = "No";
-        try {
-          await member.user.send({
-            embeds: [new EmbedBuilder()
-              .setColor(0xff3b3b)
-              .setDescription(
-`<:flash:1487027526394974218> **You have been banned**
-
-**Server:** **${interaction.guild.name}**
-
-<:moderator:1487021865682735225> Moderator: <@${interaction.user.id}>  
-<:reason:1487022066644291614> Reason: ${reason}`
-              )
-              .setTimestamp()]
-          });
-          dmStatus = "Yes";
-        } catch { dmStatus = "No"; }
-
-        await sendLog(interaction.guild, new EmbedBuilder()
-          .setColor(0xff3b3b).setTitle('🔨 Member Banned (via button)')
-          .addFields(
-            { name: 'User', value: `<@${member.id}>`, inline: true },
-            { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
-            { name: 'Reason', value: reason }
-          ).setTimestamp());
-
         const updatedEmbed = new EmbedBuilder()
           .setColor(0x2b2d31)
           .setAuthor({ name: `${member.user.tag} has been banned`, iconURL: member.user.displayAvatarURL() })
           .addFields(
             { name: "<:user:1487021741720076309> User", value: `<@${member.id}>`, inline: true },
             { name: "<:reason:1487022066644291614> Reason", value: reason, inline: true },
-            { name: "<:dm:1487024757239971913> DM Sent", value: dmStatus, inline: true },
             { name: "<:moderator:1487021865682735225> Moderator", value: `<@${interaction.user.id}>` }
           )
           .setTimestamp();
 
         const deleteRow = new ActionRowBuilder().addComponents(makeDeleteBtn(embeddedInvokerId));
         await interaction.message.edit({ embeds: [updatedEmbed], components: [deleteRow] });
+
+        member.user.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription(
+`<:flash:1487027526394974218> **You have been banned**
+
+**Server:** **${interaction.guild.name}**
+
+<:moderator:1487021865682735225> Moderator: <@${interaction.user.id}>  
+<:reason:1487022066644291614> Reason: ${reason}`
+        ).setTimestamp()] }).catch(() => {});
+
+        sendLog(interaction.guild, new EmbedBuilder()
+          .setColor(0xff3b3b).setTitle('🔨 Member Banned (via button)')
+          .addFields(
+            { name: 'User', value: `<@${member.id}>`, inline: true },
+            { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
+            { name: 'Reason', value: reason }
+          ).setTimestamp());
 
       } catch (err) { console.error(err); }
     }
