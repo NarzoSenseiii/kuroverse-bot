@@ -207,7 +207,7 @@ const helpPages = [
       { name: '🖼️  `.avatar [user]`  /  `.av [user]`', value: '> Display a user\'s avatar in full resolution.' },
       { name: '🏠  `.serverinfo`  /  `.si`', value: '> View server info — members, channels, boost status & owner.' },
       { name: '<:user:1487021741720076309>  `.membercount`  /  `.mc`', value: '> Display the current member count of the server.' },
-      { name: '🗑️  `.purge <amount>`', value: '> Bulk delete up to **100** messages. Requires **Manage Messages**.' },
+      { name: '🗑️  `.purge <amount>`  /  `.purge <user> <amount>`', value: '> Bulk delete up to **100** messages. Optionally target a specific user to only delete their messages. Requires **Manage Messages**.' },
       { name: '🎲  `.choose <option1> or <option2>`', value: '> Let the bot pick between two or more options for you.' },
       { name: '<:reason:1487022066644291614>  `.afk [reason]`', value: '> Set yourself as AFK. Others who ping you will be notified. Auto-removed when you chat.' },
       { name: '🏓  `.ping`', value: '> Check if the bot is online.' }
@@ -311,6 +311,44 @@ client.on('messageCreate', async message => {
           .setDescription(`<:reason:1487022066644291614> **${name}** is AFK right now: ${data.reason}`)
           .setTimestamp()] }).catch(() => {});
       }
+    }
+  }
+
+  // ─── AURA REPLIES ────────────────────────────────────────
+  // Triggers ONLY when the entire message is nothing but the name or mention.
+  // Strips all punctuation/whitespace then checks for an exact match.
+  {
+    const POLTERGEIST_ID = '1212375999132467270';
+    const DIE_ID         = '1443279834938740748';
+    const AURA_EMOJI     = '<:AizenChair:1487355508418674839>';
+
+    // Strip punctuation and surrounding whitespace, lowercase for comparison
+    const stripped = message.content.replace(/[^\w<>@!]/g, '').toLowerCase();
+
+    // Build the two possible mention strings (with and without the ! flag)
+    const polterMention1 = `<@${POLTERGEIST_ID}>`;
+    const polterMention2 = `<@!${POLTERGEIST_ID}>`;
+    const dieMention1    = `<@${DIE_ID}>`;
+    const dieMention2    = `<@!${DIE_ID}>`;
+
+    // For name matching: strip ALL non-alpha chars from the raw content and compare
+    const lettersOnly = message.content.replace(/[^a-zA-Z]/g, '').toLowerCase();
+
+    const isPoltergeist =
+      message.content.trim() === polterMention1 ||
+      message.content.trim() === polterMention2 ||
+      lettersOnly === 'poltergeist';
+
+    const isDie =
+      message.content.trim() === dieMention1 ||
+      message.content.trim() === dieMention2 ||
+      lettersOnly === 'die';
+
+    if (isPoltergeist) {
+      return message.reply(`Poltergeist?? Aura. ${AURA_EMOJI}`);
+    }
+    if (isDie) {
+      return message.reply(`Die?? Aura. ${AURA_EMOJI}`);
     }
   }
 
@@ -616,6 +654,8 @@ client.on('messageCreate', async message => {
   }
 
   // ─── PURGE ───────────────────────────────────────────────
+  // Usage: .purge <amount>            — bulk delete last N messages
+  //        .purge <user|id> <amount>  — delete that user's messages from last 100
   if (command === 'purge') {
     try {
       if (!message.member.permissions.has('ManageMessages')) {
@@ -625,32 +665,91 @@ client.on('messageCreate', async message => {
         });
       }
 
-      const amount = parseInt(args[1]);
-      if (isNaN(amount) || amount < 1 || amount > 100)
-        return message.reply("Provide a number between 1 and 100.");
+      // Detect whether arg[1] is a user (mention/ID) or a plain number
+      const userIdMatch = args[1]?.match(/^<?@?!?(\d{17,19})>?$/);
+      const isUserPurge = userIdMatch && isNaN(Number(args[1].replace(/\D/g, '').length > 6 ? '' : args[1]));
+
+      // Simpler heuristic: if args[1] looks like a mention or a long ID (17-19 digits), treat as user purge
+      const looksLikeUser = args[1] && /^<?@?!?\d{17,19}>?$/.test(args[1]);
 
       await message.delete();
-      const deleted = await message.channel.bulkDelete(amount, true);
 
-      const embed = new EmbedBuilder()
-        .setColor(0x2b2d31)
-        .setAuthor({ name: `${deleted.size} messages purged`, iconURL: message.guild.iconURL() })
-        .addFields(
-          { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>`, inline: true },
-          { name: "<:reason:1487022066644291614> Amount", value: `${deleted.size}`, inline: true }
-        )
-        .setTimestamp();
+      if (looksLikeUser) {
+        // ── USER PURGE ──────────────────────────────────────
+        const targetId = args[1].replace(/\D/g, '');
+        const amount   = parseInt(args[2]);
 
-      const msg = await message.channel.send({ embeds: [embed] });
-      setTimeout(() => msg.delete().catch(() => {}), 5000);
+        if (isNaN(amount) || amount < 1 || amount > 100)
+          return message.reply("Provide a number between 1 and 100. Usage: `.purge @user <amount>`");
 
-      sendLog(message.guild, new EmbedBuilder()
-        .setColor(0xff3b3b).setTitle('🗑️ Messages Purged')
-        .addFields(
-          { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
-          { name: 'Amount', value: `${deleted.size}`, inline: true },
-          { name: 'Channel', value: `<#${message.channel.id}>`, inline: true }
-        ).setTimestamp());
+        let targetUser;
+        try { targetUser = await client.users.fetch(targetId); }
+        catch { return message.reply("Invalid user ID."); }
+
+        // Fetch last 100 messages, filter to target user's, take up to `amount`
+        const fetched  = await message.channel.messages.fetch({ limit: 100 });
+        const toDelete = fetched
+          .filter(m => m.author.id === targetId)
+          .first(amount);
+
+        if (toDelete.length === 0)
+          return message.channel.send({ embeds: [new EmbedBuilder()
+            .setColor(0xff3b3b)
+            .setDescription(`<:flash:1487027526394974218> No recent messages found from <@${targetId}>.`)
+            .setTimestamp()] }).then(m => setTimeout(() => m.delete().catch(() => {}), 5000));
+
+        await message.channel.bulkDelete(toDelete, true);
+
+        const embed = new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setAuthor({ name: `${toDelete.length} messages purged`, iconURL: message.guild.iconURL() })
+          .addFields(
+            { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>`, inline: true },
+            { name: "<:user:1487021741720076309> Target", value: `<@${targetId}>`, inline: true },
+            { name: "<:reason:1487022066644291614> Deleted", value: `${toDelete.length}`, inline: true }
+          )
+          .setTimestamp();
+
+        const msg = await message.channel.send({ embeds: [embed] });
+        setTimeout(() => msg.delete().catch(() => {}), 5000);
+
+        sendLog(message.guild, new EmbedBuilder()
+          .setColor(0xff3b3b).setTitle('🗑️ Messages Purged (User)')
+          .addFields(
+            { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
+            { name: 'Target', value: `<@${targetId}>`, inline: true },
+            { name: 'Deleted', value: `${toDelete.length}`, inline: true },
+            { name: 'Channel', value: `<#${message.channel.id}>`, inline: true }
+          ).setTimestamp());
+
+      } else {
+        // ── REGULAR PURGE ───────────────────────────────────
+        const amount = parseInt(args[1]);
+        if (isNaN(amount) || amount < 1 || amount > 100)
+          return message.reply("Provide a number between 1 and 100.");
+
+        const deleted = await message.channel.bulkDelete(amount, true);
+
+        const embed = new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setAuthor({ name: `${deleted.size} messages purged`, iconURL: message.guild.iconURL() })
+          .addFields(
+            { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>`, inline: true },
+            { name: "<:reason:1487022066644291614> Amount", value: `${deleted.size}`, inline: true }
+          )
+          .setTimestamp();
+
+        const msg = await message.channel.send({ embeds: [embed] });
+        setTimeout(() => msg.delete().catch(() => {}), 5000);
+
+        sendLog(message.guild, new EmbedBuilder()
+          .setColor(0xff3b3b).setTitle('🗑️ Messages Purged')
+          .addFields(
+            { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
+            { name: 'Amount', value: `${deleted.size}`, inline: true },
+            { name: 'Channel', value: `<#${message.channel.id}>`, inline: true }
+          ).setTimestamp());
+      }
     } catch (err) { console.error(err); message.reply("Error purging messages. Messages older than 14 days can't be bulk deleted."); }
   }
 
