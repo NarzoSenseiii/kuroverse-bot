@@ -850,9 +850,9 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
       try {
         await member.user.send({
           embeds: [new EmbedBuilder()
-            .setColor(0x57F287)
-            .setDescription(
-`<:tick:1487030751550509066> **Your role has been ${hasRole ? 'removed' : 'assigned'}**
+            .setColor(hasRole ? 0xff3b3b : 0x57F287)
+.setDescription(
+`${hasRole ? '<:flash:1487027526394974218>' : '<:tick:1487030751550509066>'} **Your role has been ${hasRole ? 'removed' : 'assigned'}**
 
 **Server:** **${message.guild.name}**
 
