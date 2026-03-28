@@ -273,7 +273,7 @@ client.on('messageCreate', async message => {
 <:moderator:1487021865682735225> Moderator: <@${invokerId}>  
 <:reason:1487022066644291614> Reason: ${reason}
 
-${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
+${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}
             )
             .setTimestamp()]
         });
@@ -545,12 +545,31 @@ ${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
           embeds: [new EmbedBuilder()
             .setColor(0xff3b3b)
             .setDescription(
+let invite;
+      try {
+        const channel = message.guild.channels.cache.find(c => c.type === 0);
+        invite = await channel.createInvite({ maxAge: 0, maxUses: 1 });
+      } catch { invite = null; }
+
+      let dmStatus = "No";
+      try {
+        await member.user.send({
+          embeds: [new EmbedBuilder()
+            .setColor(0xff3b3b)
+            .setDescription(
 `<:flash:1487027526394974218> **You have been kicked**
 
 **Server:** **${message.guild.name}**
 
 <:moderator:1487021865682735225> Moderator: <@${invokerId}>  
-<:reason:1487022066644291614> Reason: ${reason}`
+<:reason:1487022066644291614> Reason: ${reason}
+
+${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
+            )
+            .setTimestamp()]
+        });
+        dmStatus = "Yes";
+      } catch { dmStatus = "No"; }
             )
             .setTimestamp()]
         });
@@ -1156,7 +1175,7 @@ client.on('interactionCreate', async interaction => {
 <:moderator:1487021865682735225> Moderator: <@${interaction.user.id}>  
 <:reason:1487022066644291614> Reason: ${reason}
 
-${invite ? `🔗 **Rejoin:** ${invite.url}` : ""}`
+${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
               )
               .setTimestamp()]
           });
