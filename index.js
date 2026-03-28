@@ -1142,7 +1142,7 @@ try {
 
 Your presence in the server mattered and you'll be missed.
 
-${invite ? `<:Links:1487353216235737240> **Rejoin anytime:** ${invite.url}` : ''}`
+${invite ? `<:Links:1487353216235737240> **Rejoin anytime:** <${invite.url}>` : ''}`
         )
         .setTimestamp()] });
       dmStatus = "Yes";
