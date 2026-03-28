@@ -1143,7 +1143,7 @@ try {
 Your presence in the server mattered and you'll be missed.`
     )
     .setTimestamp()] });
-  if (invite) await member.user.send(`<:Links:1487353216235737240> **Rejoin anytime:** <${invite.url}>`);
+  if (invite) await member.user.send(`<:Links:1487353216235737240> **Rejoin anytime:** ${invite.url}`);
   dmStatus = "Yes";
 } catch { dmStatus = "No"; }
 
