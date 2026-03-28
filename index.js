@@ -227,7 +227,48 @@ client.on('messageCreate', async message => {
       message.reply("Error muting user.");
     }
   }
+// PURGE
+  if (command === 'purge') {
+    try {
+      if (!message.member.permissions.has('ManageMessages')) {
+        return message.channel.send({
+          embeds: [noPermsEmbed('purge messages for')],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
 
+      const amount = parseInt(args[1]);
+      if (isNaN(amount) || amount < 1 || amount > 100)
+        return message.reply("Provide a number between 1 and 100.");
+
+      await message.delete();
+      const deleted = await message.channel.bulkDelete(amount, true);
+
+      const embed = new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setAuthor({ name: `${deleted.size} messages purged`, iconURL: message.guild.iconURL() })
+        .addFields(
+          { name: "<:moderator:1487021865682735225> Moderator", value: `<@${invokerId}>`, inline: true },
+          { name: "<:reason:1487022066644291614> Amount", value: `${deleted.size}`, inline: true }
+        )
+        .setTimestamp();
+
+      const msg = await message.channel.send({ embeds: [embed] });
+      setTimeout(() => msg.delete().catch(() => {}), 5000);
+
+      sendLog(message.guild, new EmbedBuilder()
+        .setColor(0xff3b3b).setTitle('🗑️ Messages Purged')
+        .addFields(
+          { name: 'Moderator', value: `<@${invokerId}>`, inline: true },
+          { name: 'Amount', value: `${deleted.size}`, inline: true },
+          { name: 'Channel', value: `<#${message.channel.id}>`, inline: true }
+        ).setTimestamp());
+
+    } catch (err) {
+      console.error(err);
+      message.reply("Error purging messages. Messages older than 14 days can't be bulk deleted.");
+    }
+  }
   // UNBAN
   if (command === 'unban') {
     try {
