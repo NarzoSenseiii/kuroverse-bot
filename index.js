@@ -1381,216 +1381,147 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
     message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
   }
 
-});
-
-// ─── MUSIC COMMANDS ──────────────────────────────────────────
-// Helper: validate the user is in #music-cmd and one of the music VCs
-function getMusicVC(message) {
-  if (message.channel.id !== MUSIC_CMD_CHANNEL) return null;
-  const vc = message.member?.voice?.channel;
-  if (!vc || !MUSIC_VC_IDS.has(vc.id)) return null;
-  return vc;
-}
-
-function musicNotInVC(message) {
-  return message.channel.send({ embeds: [new EmbedBuilder()
-    .setColor(0xff3b3b)
-    .setDescription('<:flash:1487027526394974218> **You need to be in one of the Music VCs** to use music commands.')
-    .setTimestamp()
-  ] });
-}
-
-function musicWrongChannel(message) {
-  return message.channel.send({ embeds: [new EmbedBuilder()
-    .setColor(0xff3b3b)
-    .setDescription(`<:flash:1487027526394974218> **Music commands only work in <#${MUSIC_CMD_CHANNEL}>.**`)
-    .setTimestamp()
-  ] });
-}
+  // ─── MUSIC HELPERS ───────────────────────────────────────
+  function getMusicVC(msg) {
+    if (msg.channel.id !== MUSIC_CMD_CHANNEL) return null;
+    const vc = msg.member?.voice?.channel;
+    if (!vc || !MUSIC_VC_IDS.has(vc.id)) return null;
+    return vc;
+  }
 
   // ─── PLAY ────────────────────────────────────────────────
   if (command === 'play' || command === 'p') {
-    if (message.channel.id !== MUSIC_CMD_CHANNEL) return musicWrongChannel(message);
+    if (message.channel.id !== MUSIC_CMD_CHANNEL) {
+      return message.channel.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription(`<:flash:1487027526394974218> Music commands only work in <#${MUSIC_CMD_CHANNEL}>.`).setTimestamp()] });
+    }
     const vc = getMusicVC(message);
-    if (!vc) return musicNotInVC(message);
+    if (!vc) return message.channel.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription('<:flash:1487027526394974218> **You need to be in a Music VC** to use this command.').setTimestamp()] });
     const query = args.slice(1).join(' ');
     if (!query) return message.reply('Provide a song name or URL. Usage: `.play <song>`');
     try {
-      await distube.play(vc, query, {
-        member: message.member,
-        textChannel: message.channel,
-        message,
-      });
+      await distube.play(vc, query, { member: message.member, textChannel: message.channel, message });
     } catch (err) {
       console.error(err);
-      message.channel.send({ embeds: [new EmbedBuilder()
-        .setColor(0xff3b3b)
-        .setDescription(`<:flash:1487027526394974218> Could not play that. Make sure it's a valid YouTube or Spotify link/name.`)
-        .setTimestamp()
-      ] });
+      message.channel.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription('<:flash:1487027526394974218> Could not play that. Try a different name or URL.').setTimestamp()] });
     }
+    return;
   }
 
   // ─── STOP ────────────────────────────────────────────────
   if (command === 'stop') {
-    if (message.channel.id !== MUSIC_CMD_CHANNEL) return musicWrongChannel(message);
+    if (message.channel.id !== MUSIC_CMD_CHANNEL) return;
     const vc = getMusicVC(message);
-    if (!vc) return musicNotInVC(message);
+    if (!vc) return message.channel.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription('<:flash:1487027526394974218> You need to be in a Music VC.').setTimestamp()] });
     const queue = distube.getQueue(message.guild);
     if (!queue) return message.reply('Nothing is playing.');
     clearInactivityTimer(vc.id);
     await queue.stop();
-    message.channel.send({ embeds: [new EmbedBuilder()
-      .setColor(0x2b2d31)
-      .setDescription('⏹️ Stopped playback and cleared the queue.')
-      .setTimestamp()
-    ] });
+    return message.channel.send({ embeds: [new EmbedBuilder().setColor(0x2b2d31).setDescription('Stopped and cleared the queue.').setTimestamp()] });
   }
 
   // ─── SKIP ────────────────────────────────────────────────
   if (command === 'skip' || command === 's') {
-    if (message.channel.id !== MUSIC_CMD_CHANNEL) return musicWrongChannel(message);
+    if (message.channel.id !== MUSIC_CMD_CHANNEL) return;
     const vc = getMusicVC(message);
-    if (!vc) return musicNotInVC(message);
+    if (!vc) return message.channel.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription('<:flash:1487027526394974218> You need to be in a Music VC.').setTimestamp()] });
     const queue = distube.getQueue(message.guild);
     if (!queue) return message.reply('Nothing is playing.');
     try {
       await queue.skip();
-      message.channel.send({ embeds: [new EmbedBuilder()
-        .setColor(0x2b2d31)
-        .setDescription('⏭️ Skipped.')
-        .setTimestamp()
-      ] });
-    } catch {
-      message.reply('No more songs in the queue.');
-    }
+      return message.channel.send({ embeds: [new EmbedBuilder().setColor(0x2b2d31).setDescription('Skipped.').setTimestamp()] });
+    } catch { return message.reply('No more songs in the queue.'); }
   }
 
   // ─── QUEUE ───────────────────────────────────────────────
   if (command === 'queue' || command === 'q') {
-    if (message.channel.id !== MUSIC_CMD_CHANNEL) return musicWrongChannel(message);
+    if (message.channel.id !== MUSIC_CMD_CHANNEL) return;
     const vc = getMusicVC(message);
-    if (!vc) return musicNotInVC(message);
+    if (!vc) return message.channel.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription('<:flash:1487027526394974218> You need to be in a Music VC.').setTimestamp()] });
     const queue = distube.getQueue(message.guild);
     if (!queue || queue.songs.length === 0) return message.reply('The queue is empty.');
     const songs = queue.songs.slice(0, 10);
-    const list = songs.map((s, i) =>
-      `${i === 0 ? '▶️' : `\`${i}.\``} **${s.name}** — ${s.formattedDuration} — ${s.user}`
-    ).join('
-');
-    const remaining = queue.songs.length > 10 ? `
-
-*...and ${queue.songs.length - 10} more*` : '';
-    message.channel.send({ embeds: [new EmbedBuilder()
-      .setColor(0x2b2d31)
-      .setAuthor({ name: `Queue for ${vc.name}` })
-      .setDescription(list + remaining)
-      .setFooter({ text: `${queue.songs.length} song${queue.songs.length === 1 ? '' : 's'} total` })
-      .setTimestamp()
-    ] });
+    const list = songs.map((s, i) => (i === 0 ? 'Now: ' : (i + '. ')) + s.name + ' - ' + s.formattedDuration).join('\n');
+    const more = queue.songs.length > 10 ? ('\n\n...and ' + (queue.songs.length - 10) + ' more') : '';
+    return message.channel.send({ embeds: [new EmbedBuilder().setColor(0x2b2d31).setAuthor({ name: 'Queue for ' + vc.name }).setDescription(list + more).setFooter({ text: queue.songs.length + ' song(s) total' }).setTimestamp()] });
   }
 
   // ─── PAUSE ───────────────────────────────────────────────
   if (command === 'pause') {
-    if (message.channel.id !== MUSIC_CMD_CHANNEL) return musicWrongChannel(message);
+    if (message.channel.id !== MUSIC_CMD_CHANNEL) return;
     const vc = getMusicVC(message);
-    if (!vc) return musicNotInVC(message);
+    if (!vc) return message.channel.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription('<:flash:1487027526394974218> You need to be in a Music VC.').setTimestamp()] });
     const queue = distube.getQueue(message.guild);
     if (!queue) return message.reply('Nothing is playing.');
-    if (queue.paused) return message.reply('Already paused. Use `.resume` to continue.');
+    if (queue.paused) return message.reply('Already paused. Use `.resume`.');
     queue.pause();
     resetInactivityTimer(queue);
-    message.channel.send({ embeds: [new EmbedBuilder()
-      .setColor(0x2b2d31)
-      .setDescription('⏸️ Paused.')
-      .setTimestamp()
-    ] });
+    return message.channel.send({ embeds: [new EmbedBuilder().setColor(0x2b2d31).setDescription('Paused.').setTimestamp()] });
   }
 
   // ─── RESUME ──────────────────────────────────────────────
   if (command === 'resume') {
-    if (message.channel.id !== MUSIC_CMD_CHANNEL) return musicWrongChannel(message);
+    if (message.channel.id !== MUSIC_CMD_CHANNEL) return;
     const vc = getMusicVC(message);
-    if (!vc) return musicNotInVC(message);
+    if (!vc) return message.channel.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription('<:flash:1487027526394974218> You need to be in a Music VC.').setTimestamp()] });
     const queue = distube.getQueue(message.guild);
     if (!queue) return message.reply('Nothing is playing.');
     if (!queue.paused) return message.reply('Not paused.');
     queue.resume();
     clearInactivityTimer(vc.id);
-    message.channel.send({ embeds: [new EmbedBuilder()
-      .setColor(0x2b2d31)
-      .setDescription('▶️ Resumed.')
-      .setTimestamp()
-    ] });
+    return message.channel.send({ embeds: [new EmbedBuilder().setColor(0x2b2d31).setDescription('Resumed.').setTimestamp()] });
   }
 
   // ─── LOOP ────────────────────────────────────────────────
   if (command === 'loop') {
-    if (message.channel.id !== MUSIC_CMD_CHANNEL) return musicWrongChannel(message);
+    if (message.channel.id !== MUSIC_CMD_CHANNEL) return;
     const vc = getMusicVC(message);
-    if (!vc) return musicNotInVC(message);
+    if (!vc) return message.channel.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription('<:flash:1487027526394974218> You need to be in a Music VC.').setTimestamp()] });
     const queue = distube.getQueue(message.guild);
     if (!queue) return message.reply('Nothing is playing.');
     const mode = args[1]?.toLowerCase();
-    // DisTube RepeatMode: 0 = off, 1 = song, 2 = queue
     let repeatMode;
-    if (mode === 'off')        repeatMode = 0;
-    else if (mode === 'song')  repeatMode = 1;
+    if (mode === 'off') repeatMode = 0;
+    else if (mode === 'song') repeatMode = 1;
     else if (mode === 'queue') repeatMode = 2;
-    else {
-      // Toggle: off → song → queue → off
-      repeatMode = (queue.repeatMode + 1) % 3;
-    }
+    else repeatMode = (queue.repeatMode + 1) % 3;
     queue.setRepeatMode(repeatMode);
     const labels = ['Off', 'Song', 'Queue'];
-    message.channel.send({ embeds: [new EmbedBuilder()
-      .setColor(0x2b2d31)
-      .setDescription(`🔁 Loop mode set to **${labels[repeatMode]}**.`)
-      .setTimestamp()
-    ] });
+    return message.channel.send({ embeds: [new EmbedBuilder().setColor(0x2b2d31).setDescription('Loop mode set to **' + labels[repeatMode] + '**.').setTimestamp()] });
   }
 
   // ─── VOLUME ──────────────────────────────────────────────
   if (command === 'volume' || command === 'vol') {
-    if (message.channel.id !== MUSIC_CMD_CHANNEL) return musicWrongChannel(message);
+    if (message.channel.id !== MUSIC_CMD_CHANNEL) return;
     const vc = getMusicVC(message);
-    if (!vc) return musicNotInVC(message);
+    if (!vc) return message.channel.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription('<:flash:1487027526394974218> You need to be in a Music VC.').setTimestamp()] });
     const queue = distube.getQueue(message.guild);
     if (!queue) return message.reply('Nothing is playing.');
     const vol = parseInt(args[1]);
-    if (isNaN(vol) || vol < 1 || vol > 100)
-      return message.reply('Provide a volume between 1 and 100. Usage: `.volume 50`');
+    if (isNaN(vol) || vol < 1 || vol > 100) return message.reply('Provide a volume between 1 and 100.');
     queue.setVolume(vol);
-    message.channel.send({ embeds: [new EmbedBuilder()
-      .setColor(0x2b2d31)
-      .setDescription(`🔊 Volume set to **${vol}%**.`)
-      .setTimestamp()
-    ] });
+    return message.channel.send({ embeds: [new EmbedBuilder().setColor(0x2b2d31).setDescription('Volume set to **' + vol + '%**.').setTimestamp()] });
   }
 
   // ─── NOW PLAYING ─────────────────────────────────────────
   if (command === 'nowplaying' || command === 'np') {
-    if (message.channel.id !== MUSIC_CMD_CHANNEL) return musicWrongChannel(message);
+    if (message.channel.id !== MUSIC_CMD_CHANNEL) return;
     const vc = getMusicVC(message);
-    if (!vc) return musicNotInVC(message);
+    if (!vc) return message.channel.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription('<:flash:1487027526394974218> You need to be in a Music VC.').setTimestamp()] });
     const queue = distube.getQueue(message.guild);
     if (!queue || !queue.songs[0]) return message.reply('Nothing is playing.');
     const song = queue.songs[0];
     const elapsed = Math.floor(queue.currentTime);
-    const total   = song.duration;
-    const pct     = total > 0 ? Math.floor((elapsed / total) * 20) : 0;
-    const bar     = '▓'.repeat(pct) + '░'.repeat(20 - pct);
-    message.channel.send({ embeds: [new EmbedBuilder()
+    const total = song.duration;
+    const pct = total > 0 ? Math.floor((elapsed / total) * 20) : 0;
+    const bar = '▓'.repeat(pct) + '░'.repeat(20 - pct);
+    return message.channel.send({ embeds: [new EmbedBuilder()
       .setColor(0x2b2d31)
-      .setAuthor({ name: '🎵 Now Playing' })
-      .setDescription(`**[${song.name}](${song.url})**
-
-${bar}
-\`${queue.formattedCurrentTime} / ${song.formattedDuration}\``)
+      .setAuthor({ name: 'Now Playing' })
+      .setDescription('[' + song.name + '](' + song.url + ')\n\n' + bar + '\n' + queue.formattedCurrentTime + ' / ' + song.formattedDuration)
       .addFields(
-        { name: '👤 Requested by',  value: String(song.user),            inline: true },
-        { name: '🔁 Loop',          value: ['Off','Song','Queue'][queue.repeatMode], inline: true },
-        { name: '🔊 Volume',        value: `${queue.volume}%`,            inline: true }
+        { name: 'Requested by', value: String(song.user),                        inline: true },
+        { name: 'Loop',         value: ['Off','Song','Queue'][queue.repeatMode],  inline: true },
+        { name: 'Volume',       value: queue.volume + '%',                        inline: true }
       )
       .setThumbnail(song.thumbnail || null)
       .setTimestamp()
@@ -1599,19 +1530,17 @@ ${bar}
 
   // ─── SHUFFLE ─────────────────────────────────────────────
   if (command === 'shuffle') {
-    if (message.channel.id !== MUSIC_CMD_CHANNEL) return musicWrongChannel(message);
+    if (message.channel.id !== MUSIC_CMD_CHANNEL) return;
     const vc = getMusicVC(message);
-    if (!vc) return musicNotInVC(message);
+    if (!vc) return message.channel.send({ embeds: [new EmbedBuilder().setColor(0xff3b3b).setDescription('<:flash:1487027526394974218> You need to be in a Music VC.').setTimestamp()] });
     const queue = distube.getQueue(message.guild);
     if (!queue || queue.songs.length < 2) return message.reply('Not enough songs in the queue to shuffle.');
     await queue.shuffle();
-    message.channel.send({ embeds: [new EmbedBuilder()
-      .setColor(0x2b2d31)
-      .setDescription('🔀 Queue shuffled.')
-      .setTimestamp()
-    ] });
+    return message.channel.send({ embeds: [new EmbedBuilder().setColor(0x2b2d31).setDescription('Queue shuffled.').setTimestamp()] });
   }
 
+
+});
 
 // ─────────────────────────────────────────────────────────────
 // BUTTON & MODAL INTERACTIONS
