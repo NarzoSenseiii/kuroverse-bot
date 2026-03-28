@@ -227,6 +227,35 @@ client.on('messageCreate', async message => {
       message.reply("Error muting user.");
     }
   }
+  // AVATAR
+  if (command === 'avatar' || command === 'av') {
+    try {
+      let target;
+      if (args[1]) {
+        const idMatch = args[1].match(/^<?@?!?(\d{17,19})>?$/);
+        if (idMatch) {
+          try { target = await client.users.fetch(idMatch[1]); }
+          catch { return message.reply("Invalid user ID."); }
+        } else {
+          return message.reply("Mention a user or provide a valid user ID.");
+        }
+      } else {
+        target = message.author;
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setAuthor({ name: `${target.username}'s avatar`, iconURL: target.displayAvatarURL({ size: 4096 }) })
+        .setImage(target.displayAvatarURL({ size: 4096, extension: 'png' }))
+        .setTimestamp();
+
+      message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+
+    } catch (err) {
+      console.error(err);
+      message.reply("Error fetching avatar.");
+    }
+  }
 // PURGE
   if (command === 'purge') {
     try {
