@@ -61,6 +61,9 @@ const distube = new DisTube(client, {
   ],
   emitNewSongOnly: false,
   joinNewVoiceChannel: true,
+  ffmpeg: {
+    path: 'ffmpeg',
+  },
 });
 
 // ─── DISTUBE EVENTS ──────────────────────────────────────────
