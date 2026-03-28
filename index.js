@@ -1133,20 +1133,19 @@ try {
     } catch { invite = null; }
 
     let dmStatus = "No";
-    try {
-      await member.user.send({ embeds: [new EmbedBuilder()
-        .setColor(0x2b2d31)
-        .setAuthor({ name: member.guild.name, iconURL: member.guild.iconURL() })
-        .setDescription(
+try {
+  await member.user.send({ embeds: [new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setAuthor({ name: member.guild.name, iconURL: member.guild.iconURL() })
+    .setDescription(
 `**Hey ${member.user.username}, we noticed you left.**
 
-Your presence in the server mattered and you'll be missed.
-
-${invite ? `<:Links:1487353216235737240> **Rejoin anytime:** <${invite.url}>` : ''}`
-        )
-        .setTimestamp()] });
-      dmStatus = "Yes";
-    } catch { dmStatus = "No"; }
+Your presence in the server mattered and you'll be missed.`
+    )
+    .setTimestamp()] });
+  if (invite) await member.user.send(`<:Links:1487353216235737240> **Rejoin anytime:** <${invite.url}>`);
+  dmStatus = "Yes";
+} catch { dmStatus = "No"; }
 
     sendLog(member.guild, new EmbedBuilder()
       .setColor(0x2b2d31)
