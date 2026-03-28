@@ -241,10 +241,7 @@ client.on('messageCreate', async message => {
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
         .setAuthor({ name: 'I choose...', iconURL: message.guild.iconURL() })
-        .setDescription(`**${chosen}**`)
-        .addFields(
-          { name: "🎲 Options", value: options.map((o, i) => `**${i + 1}.** ${o}`).join('\n') }
-        )
+        .setDescription(`🎲 **${chosen}**`)
         .setFooter({ text: `Requested by ${message.member.displayName}`, iconURL: message.author.displayAvatarURL() })
         .setTimestamp();
 
