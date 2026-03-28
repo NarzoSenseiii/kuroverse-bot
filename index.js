@@ -227,6 +227,76 @@ client.on('messageCreate', async message => {
       message.reply("Error muting user.");
     }
   }
+  // USERINFO
+  if (command === 'userinfo' || command === 'ui') {
+    try {
+      let target;
+      if (args[1]) {
+        const idMatch = args[1].match(/^<?@?!?(\d{17,19})>?$/);
+        if (idMatch) {
+          try { target = await message.guild.members.fetch(idMatch[1]); }
+          catch { return message.reply("Invalid user ID or user not in server."); }
+        } else {
+          return message.reply("Mention a user or provide a valid user ID.");
+        }
+      } else {
+        target = message.member;
+      }
+
+      const user = target.user;
+      const joinedAt = Math.floor(target.joinedTimestamp / 1000);
+      const createdAt = Math.floor(user.createdTimestamp / 1000);
+      const roles = target.roles.cache
+        .filter(r => r.id !== message.guild.id)
+        .sort((a, b) => b.position - a.position);
+      const topRole = roles.first();
+      const warns = loadWarns();
+      const warnCount = (warns[`${message.guild.id}_${user.id}`] || []).length;
+      const isBoosting = !!target.premiumSince;
+
+      const embed = new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setAuthor({ name: `User Info: ${user.username}`, iconURL: user.displayAvatarURL() })
+        .setDescription(`Details about <@${user.id}>`)
+        .setThumbnail(user.displayAvatarURL({ size: 256 }))
+        .addFields(
+          {
+            name: "📋 Basic Info",
+            value: `**ID:** ${user.id}\n**Username:** ${user.username}\n**Display Name:** ${target.displayName}\n**Bot:** ${user.bot ? 'True' : 'False'}`
+          },
+          {
+            name: "📅 Timestamps",
+            value: `**Joined:** <t:${joinedAt}:R> • <t:${joinedAt}:f>\n**Created:** <t:${createdAt}:R> • <t:${createdAt}:f>`
+          },
+          {
+            name: "⚡ Boosting",
+            value: isBoosting ? 'Yes' : 'No',
+            inline: true
+          },
+          {
+            name: "<:warn:1487084599296135311> Warnings",
+            value: `${warnCount}`,
+            inline: true
+          },
+          {
+            name: `🎭 Roles [${roles.size}]`,
+            value: roles.size > 0 ? roles.map(r => `<@&${r.id}>`).join(', ') : 'None'
+          },
+          {
+            name: "🏆 Top Role",
+            value: topRole ? `<@&${topRole.id}>` : 'None'
+          }
+        )
+        .setFooter({ text: `Requested by ${message.member.displayName}`, iconURL: message.author.displayAvatarURL() })
+        .setTimestamp();
+
+      message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+
+    } catch (err) {
+      console.error(err);
+      message.reply("Error fetching user info.");
+    }
+  }
   // MEMBERCOUNT
   if (command === 'membercount' || command === 'mc') {
     try {
