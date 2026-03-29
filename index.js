@@ -491,7 +491,104 @@ async function handleAntiSpam(message) {
 // ─── ANTI-NUKE & ANTI-RAID ───────────────────────────────────
 const FULL_ACCESS_ROLE_ID = '1484500399334490282';
 const IMMUNE_ROLE_ID      = '1484500399908978809'; // Owner — roles at or above this are immune
+const MANAGER_ROLE_ID     = '1484500403159695471'; // Manager — can delete freely, no slow-nuke
 const NUKE_OWNER_ID       = '1212375999132467270';
+
+// ─── SLOW-NUKE TRACKER (8-hour window) ───────────────────────
+// Tracks channel deletes, role deletes, kicks, bans per user over 8h
+// Anyone below Manager role is subject to this
+const SLOW_NUKE_WINDOW_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+// Map<userId, { channelDeletes: number[], roleDeletes: number[], kicks: number[], bans: number[], snapChannels: [], snapRoles: [], bannedUsers: [] }>
+const slowNukeTracker = new Map();
+
+function getSlowData(userId) {
+  if (!slowNukeTracker.has(userId)) slowNukeTracker.set(userId, {
+    channelDeletes: [], roleDeletes: [], kicks: [], bans: [],
+    snapChannels: [], snapRoles: [], bannedUsers: []
+  });
+  return slowNukeTracker.get(userId);
+}
+
+function pruneSlowOld(arr) {
+  const cutoff = Date.now() - SLOW_NUKE_WINDOW_MS;
+  return arr.filter(t => t > cutoff);
+}
+
+// Returns true if the member is Manager or above (exempt from slow-nuke)
+function isManagerOrAbove(guild, userId) {
+  const member = guild.members.cache.get(userId);
+  if (!member) return false;
+  const managerRole = guild.roles.cache.get(MANAGER_ROLE_ID);
+  if (!managerRole) return false;
+  return member.roles.highest.position >= managerRole.position;
+}
+
+// Strip every role granting dangerous permissions from a member
+async function stripDangerousRoles(member) {
+  const stripped = [];
+  for (const [, role] of member.roles.cache) {
+    if (role.managed) continue; // bot-integration roles can't be removed
+    const p = role.permissions;
+    if (p.has('ManageChannels') || p.has('ManageRoles') || p.has('KickMembers') || p.has('BanMembers') || p.has('Administrator')) {
+      try { await member.roles.remove(role, 'Slow-Nuke: stripping dangerous permissions'); stripped.push(role.name); } catch {}
+    }
+  }
+  return stripped;
+}
+
+async function executeSlowNuke(guild, executorId, actionLabel) {
+  if (!antiNukeEnabled) return;
+  if (isImmune(guild, executorId)) return;
+  if (isManagerOrAbove(guild, executorId)) return;
+
+  const executor = await guild.members.fetch(executorId).catch(() => null);
+  if (!executor) return;
+
+  const slow = getSlowData(executorId);
+
+  // Strip dangerous roles — NO ban
+  const stripped = await stripDangerousRoles(executor);
+
+  // Revert: unban recently banned members
+  for (const uid of slow.bannedUsers || []) {
+    try { await guild.members.unban(uid, 'Slow-Nuke revert'); } catch {}
+  }
+
+  // Revert: recreate deleted roles (with member reassignment) + channels (with overwrite remapping)
+  await revertDeletedItems(guild, slow.snapRoles || [], slow.snapChannels || []);
+
+  const strippedText = stripped.length ? stripped.map(r => `\`${r}\``).join(', ') : 'None found';
+
+  sendLog(guild, new EmbedBuilder()
+    .setColor(0xff6600)
+    .setAuthor({ name: '🛡️ Slow-Nuke Detected', iconURL: guild.iconURL() })
+    .setThumbnail(executor.user.displayAvatarURL())
+    .addFields(
+      { name: '<:user:1487021741720076309> Perpetrator', value: `<@${executorId}> (${executor.user.tag})`, inline: true },
+      { name: '<:reason:1487022066644291614> Trigger', value: actionLabel, inline: true },
+      { name: '<:moderator:1487021865682735225> Response', value: 'Roles stripped + Actions reverted', inline: true },
+      { name: '🔑 Roles Stripped', value: strippedText }
+    ).setTimestamp());
+
+  try {
+    const owner = await client.users.fetch(NUKE_OWNER_ID);
+    await owner.send({ embeds: [new EmbedBuilder()
+      .setColor(0xff6600)
+      .setAuthor({ name: '🚨 SLOW NUKE STOPPED', iconURL: guild.iconURL() })
+      .setThumbnail(executor.user.displayAvatarURL())
+      .setDescription(`A slow nuke was caught in **${guild.name}**.\nSomeone below Manager deleted more than once within 8 hours.`)
+      .addFields(
+        { name: '<:user:1487021741720076309> Perpetrator', value: `<@${executorId}>\n**Tag:** ${executor.user.tag}\n**ID:** ${executorId}` },
+        { name: '<:flash:1487027526394974218> Trigger', value: actionLabel, inline: true },
+        { name: '<:moderator:1487021865682735225> Action Taken', value: 'Roles stripped + Actions reverted', inline: true },
+        { name: '🔑 Roles Stripped', value: strippedText },
+        { name: '🔗 Server', value: `${guild.name} (${guild.id})` }
+      ).setTimestamp()] });
+  } catch {}
+
+  slowNukeTracker.delete(executorId);
+}
 
 let antiNukeEnabled = true;
 let antiRaidEnabled = true;
@@ -522,6 +619,62 @@ function isImmune(guild, userId) {
   if (!immuneRole) return false;
   // immune if their highest role position is >= the immune role position
   return member.roles.highest.position >= immuneRole.position;
+}
+
+// ─── SHARED REVERT HELPER ────────────────────────────────────
+// Recreates deleted roles (with member reassignment) and channels
+// (with channel-level overwrites remapped to new role IDs).
+async function revertDeletedItems(guild, snapRoles, snapChannels) {
+  // oldId -> newId mapping so channel overwrites can reference the right role
+  const roleIdMap = new Map();
+
+  // Step 1: Recreate roles and reassign members
+  for (const snap of snapRoles || []) {
+    try {
+      const newRole = await guild.roles.create({
+        name: snap.name,
+        color: snap.color,
+        hoist: snap.hoist,
+        mentionable: snap.mentionable,
+        permissions: BigInt(snap.permissions),
+        reason: 'Anti-Nuke revert'
+      });
+
+      if (snap.oldId) roleIdMap.set(snap.oldId, newRole.id);
+
+      // Reassign to every member who previously had this role
+      for (const memberId of snap.memberIds || []) {
+        try {
+          const m = await guild.members.fetch(memberId).catch(() => null);
+          if (m) await m.roles.add(newRole, 'Anti-Nuke revert: restoring role');
+        } catch {}
+      }
+    } catch {}
+  }
+
+  // Step 2: Recreate channels, remapping any overwrite IDs that changed
+  for (const snap of snapChannels || []) {
+    try {
+      // Remap role IDs in permission overwrites old -> new
+      const remappedOverwrites = (snap.permissionOverwrites || []).map(o => ({
+        ...o,
+        id: roleIdMap.get(o.id) || o.id
+      }));
+
+      await guild.channels.create({
+        name: snap.name,
+        type: snap.type,
+        topic: snap.topic,
+        nsfw: snap.nsfw,
+        bitrate: snap.bitrate,
+        userLimit: snap.userLimit,
+        rateLimitPerUser: snap.rateLimitPerUser,
+        parent: snap.parentId,
+        permissionOverwrites: remappedOverwrites,
+        reason: 'Anti-Nuke revert'
+      });
+    } catch {}
+  }
 }
 
 async function executeNuke(guild, executorId, actionLabel) {
@@ -555,37 +708,8 @@ async function executeNuke(guild, executorId, actionLabel) {
     try { await guild.members.unban(userId, 'Anti-Nuke revert'); } catch {}
   }
 
-  // Revert: recreate deleted channels
-  for (const snap of data._deletedChannels || []) {
-    try {
-      await guild.channels.create({
-        name: snap.name,
-        type: snap.type,
-        topic: snap.topic,
-        nsfw: snap.nsfw,
-        bitrate: snap.bitrate,
-        userLimit: snap.userLimit,
-        rateLimitPerUser: snap.rateLimitPerUser,
-        parent: snap.parentId,
-        permissionOverwrites: snap.permissionOverwrites,
-        reason: 'Anti-Nuke revert'
-      });
-    } catch {}
-  }
-
-  // Revert: recreate deleted roles
-  for (const snap of data._deletedRoles || []) {
-    try {
-      await guild.roles.create({
-        name: snap.name,
-        color: snap.color,
-        hoist: snap.hoist,
-        mentionable: snap.mentionable,
-        permissions: BigInt(snap.permissions),
-        reason: 'Anti-Nuke revert'
-      });
-    } catch {}
-  }
+  // Revert: recreate deleted roles (with member reassignment) + channels (with overwrite remapping)
+  await revertDeletedItems(guild, data._deletedRoles || [], data._deletedChannels || []);
 
   // Build response description
   const responseText = adderInfo
@@ -2680,13 +2804,47 @@ client.on('guildBanAdd', async (ban) => {
     if (executorId === client.user.id) return;
     if (isImmune(ban.guild, executorId)) return;
 
+    // ── Fast nuke tracker ────────────────────────────────────
     const data = getNukeData(executorId);
     if (!data._bannedUsers) data._bannedUsers = [];
     data._bannedUsers.push(ban.user.id);
     data.bans.push(Date.now());
     data.bans = pruneOld(data.bans);
+    if (data.bans.length >= 3) {
+      await executeNuke(ban.guild, executorId, `Mass Ban (${data.bans.length} bans in 10s)`);
+      return;
+    }
 
-    if (data.bans.length >= 3) await executeNuke(ban.guild, executorId, `Mass Ban (${data.bans.length} bans in 10s)`);
+    // ── Slow nuke tracker ────────────────────────────────────
+    if (!isManagerOrAbove(ban.guild, executorId)) {
+      const slow = getSlowData(executorId);
+      slow.bannedUsers.push(ban.user.id);
+      slow.bans = pruneSlowOld(slow.bans);
+      const isRepeat = slow.bans.length >= 1;
+      slow.bans.push(Date.now());
+
+      const member = ban.guild.members.cache.get(executorId);
+      const tag = member?.user?.tag || executorId;
+
+      try {
+        const owner = await client.users.fetch(NUKE_OWNER_ID);
+        await owner.send({ embeds: [new EmbedBuilder()
+          .setColor(isRepeat ? 0xff6600 : 0xffa500)
+          .setAuthor({ name: isRepeat ? '🚨 Repeat Ban (Slow Nuke)' : '⚠️ Ban by Non-Manager', iconURL: ban.guild.iconURL() })
+          .setDescription(isRepeat
+            ? `This is their **2nd+ ban within 8 hours** in **${ban.guild.name}**. Roles are being stripped.`
+            : `A non-manager issued a ban in **${ban.guild.name}**.`)
+          .addFields(
+            { name: '<:user:1487021741720076309> Banned User', value: `<@${ban.user.id}> (${ban.user.tag})`, inline: true },
+            { name: '<:moderator:1487021865682735225> By', value: `<@${executorId}> (${tag})`, inline: true },
+            { name: '🕐 Bans in Last 8h', value: `${slow.bans.length}`, inline: true }
+          ).setTimestamp()] });
+      } catch {}
+
+      if (isRepeat) {
+        await executeSlowNuke(ban.guild, executorId, `Repeat Ban (${slow.bans.length} in 8h)`);
+      }
+    }
   } catch {}
 });
 
@@ -2698,10 +2856,41 @@ client.on('guildMemberRemove', async member => {
       if (entry && entry.executor.id !== client.user.id && Date.now() - entry.createdTimestamp < 3000) {
         const executorId = entry.executor.id;
         if (!isImmune(member.guild, executorId)) {
+          // ── Fast nuke tracker ──────────────────────────────
           const data = getNukeData(executorId);
           data.kicks.push(Date.now());
           data.kicks = pruneOld(data.kicks);
-          if (data.kicks.length >= 3) await executeNuke(member.guild, executorId, `Mass Kick (${data.kicks.length} kicks in 10s)`);
+          if (data.kicks.length >= 3) {
+            await executeNuke(member.guild, executorId, `Mass Kick (${data.kicks.length} kicks in 10s)`);
+          } else if (!isManagerOrAbove(member.guild, executorId)) {
+            // ── Slow nuke tracker ──────────────────────────
+            const slow = getSlowData(executorId);
+            slow.kicks = pruneSlowOld(slow.kicks);
+            const isRepeat = slow.kicks.length >= 1;
+            slow.kicks.push(Date.now());
+
+            const kickerMember = member.guild.members.cache.get(executorId);
+            const tag = kickerMember?.user?.tag || executorId;
+
+            try {
+              const owner = await client.users.fetch(NUKE_OWNER_ID);
+              await owner.send({ embeds: [new EmbedBuilder()
+                .setColor(isRepeat ? 0xff6600 : 0xffa500)
+                .setAuthor({ name: isRepeat ? '🚨 Repeat Kick (Slow Nuke)' : '⚠️ Kick by Non-Manager', iconURL: member.guild.iconURL() })
+                .setDescription(isRepeat
+                  ? `This is their **2nd+ kick within 8 hours** in **${member.guild.name}**. Roles are being stripped.`
+                  : `A non-manager kicked someone in **${member.guild.name}**.`)
+                .addFields(
+                  { name: '<:user:1487021741720076309> Kicked User', value: `<@${member.id}> (${member.user.tag})`, inline: true },
+                  { name: '<:moderator:1487021865682735225> By', value: `<@${executorId}> (${tag})`, inline: true },
+                  { name: '🕐 Kicks in Last 8h', value: `${slow.kicks.length}`, inline: true }
+                ).setTimestamp()] });
+            } catch {}
+
+            if (isRepeat) {
+              await executeSlowNuke(member.guild, executorId, `Repeat Kick (${slow.kicks.length} in 8h)`);
+            }
+          }
         }
       }
     } catch {}
@@ -2753,9 +2942,7 @@ client.on('channelDelete', async channel => {
     if (executorId === client.user.id) return;
     if (isImmune(channel.guild, executorId)) return;
 
-    const data = getNukeData(executorId);
-
-    // Snapshot the channel so we can recreate it on nuke trigger
+    // Build snapshot (shared by fast + slow trackers)
     const snapshot = {
       name: channel.name,
       type: channel.type,
@@ -2770,12 +2957,49 @@ client.on('channelDelete', async channel => {
         id: o.id, type: o.type, allow: o.allow.bitfield.toString(), deny: o.deny.bitfield.toString()
       })) || []
     };
-    data._deletedChannels.push(snapshot);
 
+    // ── Fast nuke (2 deletions in 10s) ───────────────────────
+    const data = getNukeData(executorId);
+    data._deletedChannels.push(snapshot);
     data.channelDeletes.push(Date.now());
     data.channelDeletes = pruneOld(data.channelDeletes);
+    if (data.channelDeletes.length >= 2) {
+      await executeNuke(channel.guild, executorId, `Mass Channel Delete (${data.channelDeletes.length} in 10s)`);
+      return;
+    }
 
-    if (data.channelDeletes.length >= 2) await executeNuke(channel.guild, executorId, `Mass Channel Delete (${data.channelDeletes.length} in 10s)`);
+    // ── Slow nuke — only applies to users below Manager ──────
+    if (!isManagerOrAbove(channel.guild, executorId)) {
+      const slow = getSlowData(executorId);
+      slow.snapChannels.push(snapshot);
+      slow.channelDeletes = pruneSlowOld(slow.channelDeletes);
+      const isRepeat = slow.channelDeletes.length >= 1; // already deleted one in the last 8h
+      slow.channelDeletes.push(Date.now());
+
+      const member = channel.guild.members.cache.get(executorId);
+      const tag = member?.user?.tag || executorId;
+
+      // DM Poltergeist on EVERY channel delete by a non-manager
+      try {
+        const owner = await client.users.fetch(NUKE_OWNER_ID);
+        await owner.send({ embeds: [new EmbedBuilder()
+          .setColor(isRepeat ? 0xff6600 : 0xffa500)
+          .setAuthor({ name: isRepeat ? '🚨 Repeat Channel Delete (Slow Nuke)' : '⚠️ Channel Deleted by Non-Manager', iconURL: channel.guild.iconURL() })
+          .setDescription(isRepeat
+            ? `This is their **2nd+ deletion within 8 hours** in **${channel.guild.name}**. Roles are being stripped.`
+            : `A non-manager deleted a channel in **${channel.guild.name}**.`)
+          .addFields(
+            { name: '📁 Channel', value: `#${snapshot.name}`, inline: true },
+            { name: '<:user:1487021741720076309> Deleted By', value: `<@${executorId}> (${tag})`, inline: true },
+            { name: '🕐 Deletes in Last 8h', value: `${slow.channelDeletes.length}`, inline: true }
+          ).setTimestamp()] });
+      } catch {}
+
+      // On 2nd+ deletion in 8h: strip roles + revert
+      if (isRepeat) {
+        await executeSlowNuke(channel.guild, executorId, `Repeat Channel Delete (${slow.channelDeletes.length} in 8h)`);
+      }
+    }
   } catch {}
 });
 
@@ -2789,23 +3013,57 @@ client.on('roleDelete', async role => {
     if (executorId === client.user.id) return;
     if (isImmune(role.guild, executorId)) return;
 
-    const data = getNukeData(executorId);
-
-    // Snapshot the role so we can recreate it on nuke trigger
     const snapshot = {
       name: role.name,
       color: role.color,
       hoist: role.hoist,
       mentionable: role.mentionable,
       permissions: role.permissions.bitfield.toString(),
-      position: role.rawPosition
+      position: role.rawPosition,
+      oldId: role.id,
+      memberIds: role.members.map(m => m.id)
     };
-    data._deletedRoles.push(snapshot);
 
+    // ── Fast nuke (2 deletions in 10s) ───────────────────────
+    const data = getNukeData(executorId);
+    data._deletedRoles.push(snapshot);
     data.roleDeletes.push(Date.now());
     data.roleDeletes = pruneOld(data.roleDeletes);
+    if (data.roleDeletes.length >= 2) {
+      await executeNuke(role.guild, executorId, `Mass Role Delete (${data.roleDeletes.length} in 10s)`);
+      return;
+    }
 
-    if (data.roleDeletes.length >= 2) await executeNuke(role.guild, executorId, `Mass Role Delete (${data.roleDeletes.length} in 10s)`);
+    // ── Slow nuke — only applies to users below Manager ──────
+    if (!isManagerOrAbove(role.guild, executorId)) {
+      const slow = getSlowData(executorId);
+      slow.snapRoles.push(snapshot);
+      slow.roleDeletes = pruneSlowOld(slow.roleDeletes);
+      const isRepeat = slow.roleDeletes.length >= 1;
+      slow.roleDeletes.push(Date.now());
+
+      const member = role.guild.members.cache.get(executorId);
+      const tag = member?.user?.tag || executorId;
+
+      try {
+        const owner = await client.users.fetch(NUKE_OWNER_ID);
+        await owner.send({ embeds: [new EmbedBuilder()
+          .setColor(isRepeat ? 0xff6600 : 0xffa500)
+          .setAuthor({ name: isRepeat ? '🚨 Repeat Role Delete (Slow Nuke)' : '⚠️ Role Deleted by Non-Manager', iconURL: role.guild.iconURL() })
+          .setDescription(isRepeat
+            ? `This is their **2nd+ deletion within 8 hours** in **${role.guild.name}**. Roles are being stripped.`
+            : `A non-manager deleted a role in **${role.guild.name}**.`)
+          .addFields(
+            { name: '🎭 Role', value: `@${snapshot.name}`, inline: true },
+            { name: '<:user:1487021741720076309> Deleted By', value: `<@${executorId}> (${tag})`, inline: true },
+            { name: '🕐 Deletes in Last 8h', value: `${slow.roleDeletes.length}`, inline: true }
+          ).setTimestamp()] });
+      } catch {}
+
+      if (isRepeat) {
+        await executeSlowNuke(role.guild, executorId, `Repeat Role Delete (${slow.roleDeletes.length} in 8h)`);
+      }
+    }
   } catch {}
 });
 
