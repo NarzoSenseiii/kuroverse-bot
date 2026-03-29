@@ -13,7 +13,7 @@
   "dependencies": {
     "discord.js": "^14.18.0",
     "distube": "^4.2.4",
-    "@distube/yt-dlp": "^1.1.5",
+    "@distube/yt-dlp": "^1.0.0",
     "ffmpeg-static": "^5.2.0",
     "dotenv": "^16.4.5"
   }
