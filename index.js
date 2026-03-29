@@ -476,7 +476,7 @@ async function handleAntiSpam(message) {
 
 // ─── ANTI-NUKE & ANTI-RAID ───────────────────────────────────
 const FULL_ACCESS_ROLE_ID = '1484500399334490282';
-const IMMUNE_ROLE_ID      = '1484500403159695471'; // Manager — roles at or above this are immune
+const IMMUNE_ROLE_ID      = '1484500399908978809'; // Owner — roles at or above this are immune
 const NUKE_OWNER_ID       = '1212375999132467270';
 
 let antiNukeEnabled = true;
