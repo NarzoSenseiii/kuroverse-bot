@@ -831,7 +831,8 @@ const helpPages = [
       { name: '🎲  `.choose <option1> or <option2>`', value: '> Let the bot pick between two or more options for you.' },
       { name: '<:reason:1487022066644291614>  `.afk [reason]`', value: '> Set yourself as AFK. Others who ping you will be notified. Auto-removed when you chat.' },
       { name: '🏓  `.ping`', value: '> Check if the bot is online.' },
-      { name: '🖼️  `.steal <n>`', value: '> Reply to a message containing an emoji or sticker to add it to the server. **Admin only.**' }
+      { name: '🖼️  `.steal <n>`', value: '> Reply to a message containing a custom emoji or sticker to add it to the server. **Moderator+**' },
+      { name: '📤  `.upload emoji <name>`  /  `.upload sticker <name>`', value: '> Reply to a message with an image to upload it as an emoji or sticker. **Moderator+**' }
     )
     .setFooter({ text: 'Page 2 of 5  •  Utility' })
     .setTimestamp(),
@@ -2351,13 +2352,10 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
   // ─── STEAL ───────────────────────────────────────────────
   if (command === 'steal') {
     try {
-      if (!message.member.permissions.has('Administrator')) {
+      const hasModRole = message.member.roles.cache.has('1484500406959607808') || message.member.roles.highest.position >= (message.guild.roles.cache.get('1484500406959607808')?.position || 0);
+      if (!hasModRole) {
         return message.channel.send({
-          embeds: [new EmbedBuilder()
-            .setColor(0xff3b3b)
-            .setAuthor({ name: 'Missing Permissions' })
-            .setDescription('<:flash:1487027526394974218> **Only Administrators can steal emojis.**')
-            .setTimestamp()],
+          embeds: [noPermsEmbed('steal emojis or stickers for')],
           components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
         });
       }
@@ -2419,6 +2417,87 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       }
 
     } catch (err) { console.error(err); message.reply('Error running steal command.'); }
+  }
+
+  // ─── UPLOAD EMOJI / STICKER ──────────────────────────────
+  if (command === 'upload') {
+    try {
+      const hasModRole = message.member.roles.cache.has('1484500406959607808') || message.member.roles.highest.position >= (message.guild.roles.cache.get('1484500406959607808')?.position || 0);
+      if (!hasModRole) {
+        return message.channel.send({
+          embeds: [noPermsEmbed('upload emojis or stickers for')],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
+      const type = args[1]?.toLowerCase();
+      const name = args[2];
+
+      if (!type || !['emoji', 'sticker'].includes(type)) {
+        return message.reply('Usage: `.upload emoji <name>` or `.upload sticker <name>`');
+      }
+      if (!name || !/^[a-zA-Z0-9_]+$/.test(name)) {
+        return message.reply('Provide a valid name (letters, numbers, underscores only).');
+      }
+      if (!message.reference) {
+        return message.reply('You need to **reply to a message** that contains an image.');
+      }
+
+      const replied = await message.channel.messages.fetch(message.reference.messageId);
+      const imageAttachment = replied.attachments.find(a => a.contentType?.startsWith('image/'));
+
+      if (!imageAttachment) {
+        return message.reply('No image found in the replied message. Make sure you reply to a message with an image attached.');
+      }
+
+      if (type === 'emoji') {
+        try {
+          const newEmoji = await message.guild.emojis.create({ attachment: imageAttachment.url, name });
+          return message.channel.send({
+            embeds: [new EmbedBuilder()
+              .setColor(0x57F287)
+              .setAuthor({ name: 'Emoji Uploaded!', iconURL: message.guild.iconURL() })
+              .setDescription(`<:tick:1487030751550509066> Emoji **${newEmoji.toString()}** added to the server as \`:${name}:\``)
+              .setThumbnail(imageAttachment.url)
+              .addFields(
+                { name: '<:moderator:1487021865682735225> Uploaded by', value: `<@${invokerId}>`, inline: true },
+                { name: '<:reason:1487022066644291614> Name', value: `:${name}:`, inline: true }
+              )
+              .setTimestamp()],
+            components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+          });
+        } catch (e) {
+          return message.reply(`Failed to upload emoji: ${e.message}`);
+        }
+      }
+
+      if (type === 'sticker') {
+        try {
+          const newSticker = await message.guild.stickers.create({
+            file: imageAttachment.url,
+            name,
+            tags: name,
+            description: `Uploaded by ${message.author.tag}`
+          });
+          return message.channel.send({
+            embeds: [new EmbedBuilder()
+              .setColor(0x57F287)
+              .setAuthor({ name: 'Sticker Uploaded!', iconURL: message.guild.iconURL() })
+              .setDescription(`<:tick:1487030751550509066> Sticker **${name}** added to the server.`)
+              .setThumbnail(imageAttachment.url)
+              .addFields(
+                { name: '<:moderator:1487021865682735225> Uploaded by', value: `<@${invokerId}>`, inline: true },
+                { name: '<:reason:1487022066644291614> Name', value: name, inline: true }
+              )
+              .setTimestamp()],
+            components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+          });
+        } catch (e) {
+          return message.reply(`Failed to upload sticker: ${e.message}`);
+        }
+      }
+
+    } catch (err) { console.error(err); message.reply('Error running upload command.'); }
   }
 
 });
