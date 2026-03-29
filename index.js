@@ -618,6 +618,30 @@ client.on('messageCreate', async message => {
     }
   }
 
+
+  // ─── AURA REPLIES ────────────────────────────────────────
+  // Triggers ONLY when the entire message is the name or mention alone.
+  {
+    const POLTERGEIST_ID = '1212375999132467270';
+    const DIE_ID         = '1443279834938740748';
+    const AURA_EMOJI     = '<:AizenChair:1487355508418674839>';
+
+    const lettersOnly = message.content.replace(/[^a-zA-Z]/g, '').toLowerCase();
+
+    const isPoltergeist =
+      message.content.trim() === `<@${POLTERGEIST_ID}>` ||
+      message.content.trim() === `<@!${POLTERGEIST_ID}>` ||
+      lettersOnly === 'poltergeist';
+
+    const isDie =
+      message.content.trim() === `<@${DIE_ID}>` ||
+      message.content.trim() === `<@!${DIE_ID}>` ||
+      lettersOnly === 'die';
+
+    if (isPoltergeist) return message.reply(`Poltergeist?? Aura. ${AURA_EMOJI}`);
+    if (isDie)         return message.reply(`Die?? Aura. ${AURA_EMOJI}`);
+  }
+
   if (!message.content.startsWith(prefix)) return;
 
   const args = message.content.slice(prefix.length).split(' ');
