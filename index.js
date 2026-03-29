@@ -493,7 +493,7 @@ const helpPages = [
     .setAuthor({ name: `${guild.name} — Command Help`, iconURL: guild.iconURL() })
     .setDescription(
       `Welcome to the help menu! Use the buttons below to browse categories.\n\n` +
-      `**Prefix:** \`.\`  •  **Total Commands:** 20\n\n` +
+      `**Prefix:** \`.\`  •  **Total Commands:** 23\n\n` +
       `> <:user:1487021741720076309> **Utility** — Info, avatar, purge, role & fun\n` +
       `> <:moderator:1487021865682735225> **Moderation** — Ban, kick, mute, unmute & more\n` +
       `> <:warn:1487084599296135311> **Warnings** — Warn, view, clear & remove warns`
