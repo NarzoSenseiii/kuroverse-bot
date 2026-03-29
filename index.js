@@ -605,8 +605,7 @@ const helpPages = [
       `> <:user:1487021741720076309> **Utility** — Info, avatar, purge & more\n` +
       `> <:moderator:1487021865682735225> **Moderation** — Ban, kick, mute, unmute & more\n` +
       `> <:warn:1487084599296135311> **Warnings** — Warn, view, clear, warnlist & more\n` +
-      `> 🎉 **Fun** — Ship, poll, truth or dare, marry & more\n\n` +
-      `> 🔒 **Admin only:** \`.help raid\` · \`.help nuke\``
+      `> 🎉 **Fun** — Ship, poll, truth or dare, marry & more`
     )
     .setFooter({ text: 'Page 1 of 5  •  Overview' })
     .setTimestamp(),
@@ -644,10 +643,7 @@ const helpPages = [
       { name: '✏️  `.nick <user> <nickname>`', value: '> Change a member\'s nickname.' },
       { name: '🎭  `.role <user> <role>`', value: '> Assign or remove a role from a member. Toggles automatically.' },
       { name: '🛡️  `.as`', value: '> Toggle the anti-spam system on/off. **On by default.** Requires **Administrator**.' },
-      { name: '🔨  `.banlist`', value: '> View all currently banned users in the server. Requires **Ban Members**.' },
-      { name: '🔒  `.antinuke`', value: '> Toggle Anti-Nuke on/off. **Full Access only.** Use `.help nuke` for details.' },
-      { name: '🚨  `.antiraid`', value: '> Toggle Anti-Raid on/off. **Full Access only.** Use `.help raid` for details.' },
-      { name: '✅  `.endraid`', value: '> End an active raid lockdown and restore all channels. **Admin only.**' }
+      { name: '🔨  `.banlist`', value: '> View all currently banned users in the server. Requires **Ban Members**.' }
     )
     .setFooter({ text: 'Page 3 of 5  •  Moderation' })
     .setTimestamp(),
@@ -762,6 +758,38 @@ client.on('messageCreate', async message => {
   // ─── HELP ────────────────────────────────────────────────
   if (command === 'help') {
     const sub = args[1]?.toLowerCase();
+
+    if (sub === 'raid' || sub === 'nuke') {
+      if (!message.member.permissions.has('Administrator')) return;
+      const isRaid = sub === 'raid';
+      const embed = isRaid
+        ? new EmbedBuilder()
+            .setColor(0xff0000)
+            .setAuthor({ name: `${message.guild.name} — Anti-Raid`, iconURL: message.guild.iconURL() })
+            .setDescription('🚨 Anti-Raid system protects the server from mass join attacks.\n\u200b')
+            .addFields(
+              { name: '⚙️ Trigger', value: '**5 joins within 10 seconds** activates lockdown.' },
+              { name: '🔒 Response', value: 'All text channels are locked for **@everyone** automatically.' },
+              { name: '🔓  `.endraid`', value: '> Manually end the lockdown and restore all channels. **Admin only.**' },
+              { name: '🚨  `.antiraid`', value: '> Toggle Anti-Raid on/off. **Full Access only.** On by default.' },
+              { name: '📊 Current Status', value: `Anti-Raid: **${antiRaidEnabled ? '🟢 Enabled' : '🔴 Disabled'}**\nLockdown: **${raidLocked ? '🔴 Active' : '🟢 None'}**` }
+            )
+            .setTimestamp()
+        : new EmbedBuilder()
+            .setColor(0xff0000)
+            .setAuthor({ name: `${message.guild.name} — Anti-Nuke`, iconURL: message.guild.iconURL() })
+            .setDescription('🛡️ Anti-Nuke protects the server from internal threats.\n\u200b')
+            .addFields(
+              { name: '⚙️ Triggers', value: '**3 bans** in 10s\n**3 kicks** in 10s\n**2 channel deletes** in 10s\n**2 role deletes** in 10s' },
+              { name: '🔨 Response', value: 'Perpetrator is **banned immediately**, then actions are **reverted**. You are **DM\'d** with full details.' },
+              { name: '🛡️ Immune Roles', value: `Roles at or above <@&${IMMUNE_ROLE_ID}> are immune.` },
+              { name: '🛡️  `.antinuke`', value: '> Toggle Anti-Nuke on/off. **Full Access only.** On by default.' },
+              { name: '📊 Current Status', value: `Anti-Nuke: **${antiNukeEnabled ? '🟢 Enabled' : '🔴 Disabled'}**` }
+            )
+            .setTimestamp();
+      return message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+    }
+
     let page = 0;
     if (sub === 'util' || sub === 'utility')                             page = 1;
     else if (sub === 'mod' || sub === 'moderation')                      page = 2;
@@ -2110,52 +2138,6 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       .setColor(0x57F287).setTitle('✅ Raid Lockdown Ended')
       .addFields({ name: 'Ended by', value: `<@${invokerId}>`, inline: true })
       .setTimestamp());
-  }
-
-  // ─── HELP (RAID / NUKE) ──────────────────────────────────
-  if (command === 'help' && (args[1] === 'raid' || args[1] === 'nuke')) {
-    if (!message.member.permissions.has('Administrator')) {
-      return message.channel.send({
-        embeds: [new EmbedBuilder()
-          .setColor(0xff3b3b)
-          .setAuthor({ name: 'Missing Permissions' })
-          .setDescription('<:flash:1487027526394974218> **Only Administrators can view this help section.**')
-          .setTimestamp()],
-        components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
-      });
-    }
-
-    const isRaid = args[1] === 'raid';
-
-    const embed = isRaid
-      ? new EmbedBuilder()
-          .setColor(0xff0000)
-          .setAuthor({ name: `${message.guild.name} — Anti-Raid`, iconURL: message.guild.iconURL() })
-          .setDescription('🚨 Anti-Raid system protects the server from mass join attacks.\n\u200b')
-          .addFields(
-            { name: '⚙️ Trigger', value: '**5 joins within 10 seconds** activates lockdown.' },
-            { name: '🔒 Response', value: 'All text channels are locked for **@everyone** automatically.' },
-            { name: '🔓  `.endraid`', value: '> Manually end the lockdown and restore all channels. **Admin only.**' },
-            { name: '🚨  `.antiraid`', value: '> Toggle Anti-Raid on/off. **Full Access only.** On by default.' },
-            { name: '📊 Current Status', value: `Anti-Raid: **${antiRaidEnabled ? '🟢 Enabled' : '🔴 Disabled'}**\nLockdown: **${raidLocked ? '🔴 Active' : '🟢 None'}**` }
-          )
-          .setFooter({ text: 'This section is only visible to Administrators.' })
-          .setTimestamp()
-      : new EmbedBuilder()
-          .setColor(0xff0000)
-          .setAuthor({ name: `${message.guild.name} — Anti-Nuke`, iconURL: message.guild.iconURL() })
-          .setDescription('🛡️ Anti-Nuke protects the server from internal threats (rogue mods/admins).\n\u200b')
-          .addFields(
-            { name: '⚙️ Triggers', value: '**3 bans** in 10s\n**3 kicks** in 10s\n**2 channel deletes** in 10s\n**2 role deletes** in 10s' },
-            { name: '🔨 Response', value: 'Perpetrator is **banned immediately**, then their actions are **reverted**. You are **DM\'d** with full details.' },
-            { name: '🛡️ Immune Roles', value: `Roles at or above <@&${IMMUNE_ROLE_ID}> (Sr. Admin+) are immune.` },
-            { name: '🛡️  `.antinuke`', value: '> Toggle Anti-Nuke on/off. **Full Access only.** On by default.' },
-            { name: '📊 Current Status', value: `Anti-Nuke: **${antiNukeEnabled ? '🟢 Enabled' : '🔴 Disabled'}**` }
-          )
-          .setFooter({ text: 'This section is only visible to Administrators.' })
-          .setTimestamp();
-
-    return message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
   }
 
   // ─── STEAL ───────────────────────────────────────────────
