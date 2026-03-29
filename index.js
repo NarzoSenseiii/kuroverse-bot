@@ -83,6 +83,7 @@ async function resolveMember(guild, arg) {
 
 // ─── TRUTH & DARE DATA ───────────────────────────────────────
 const truths = [
+  // ── Personal & Embarrassing ──
   "What's the most embarrassing thing you've ever done in public?",
   "Have you ever lied to get out of trouble? What was the lie?",
   "What's the most childish thing you still do?",
@@ -123,6 +124,7 @@ const truths = [
   "Have you ever gotten lost somewhere embarrassingly simple?",
   "What's a show or movie you're ashamed to admit you loved?",
   "Have you ever made a promise you knew you wouldn't keep?",
+  // ── Opinions & Preferences ──
   "What's the most ridiculous fear you have?",
   "Have you ever laughed so hard something came out of your nose?",
   "What's the worst fashion choice you've ever made?",
@@ -153,6 +155,7 @@ const truths = [
   "Have you ever pretended to know a celebrity or famous person?",
   "What's the worst trouble you've gotten into as a kid?",
   "Have you ever screamed at a video game in public?",
+  // ── Deep & Reflective ──
   "What's the most ridiculous argument you've had with a sibling or friend?",
   "Have you ever been caught talking to yourself?",
   "What's the most embarrassing thing your parents have caught you doing?",
@@ -160,98 +163,201 @@ const truths = [
   "What's something you secretly judge people for?",
   "Have you ever forgotten someone's name right after being introduced?",
   "What's the most trouble you've caused without meaning to?",
+  "If your life had a theme song, what would it be and why?",
+  "What's the most irrational thing you genuinely believe?",
+  "Have you ever pretended to understand something you had no clue about?",
+  "What's a hobby or interest you hide from most people?",
+  "Have you ever had a crush on someone wildly inappropriate?",
+  "What's the meanest thought you've had about a stranger?",
+  "Have you ever done something embarrassing while sleepwalking or half-asleep?",
+  "What's the worst decision you've made on impulse?",
+  "Have you ever wished you could take back something you said?",
+  "What's the most shameful thing you've spent money on?",
+  "Have you ever faked being good at something to impress someone?",
+  "What's the strangest thing you've been obsessed with?",
+  "Have you ever been more scared than you'd admit to a friend?",
+  "What's the most ridiculous thing you've cried about?",
+  "Have you ever done something dangerous and told no one?",
+  "What's the biggest thing you've procrastinated on?",
+  "Have you ever blamed a bad mood on something other than the real cause?",
+  "What's a movie or book opinion you hold that most people would disagree with?",
+  "Have you ever pretended to have plans to avoid going somewhere?",
+  "What's the most unhinged thing you've typed and then deleted?",
+  "Have you ever convinced yourself you were good at something you really weren't?",
+  "What's the most embarrassing thing you've done to get someone's attention?",
+  "Have you ever regretted telling someone a secret?",
+  // ── Fun & Random ──
+  "What's the weirdest food combination you actually enjoy?",
+  "Have you ever laughed at a completely inappropriate time?",
+  "What's the most over-the-top reaction you've had to something minor?",
+  "Have you ever done something embarrassing and immediately looked around to see if anyone saw?",
+  "What's the most dramatic thing you've ever done over something small?",
+  "Have you ever done a voice or impression without realizing people could hear you?",
+  "What's your most controversial food opinion?",
+  "Have you ever had an imaginary argument in your head that made you genuinely upset?",
+  "What's the most embarrassing song you know every word to?",
+  "Have you ever done something embarrassing and immediately walked away like nothing happened?",
+  "What's the strangest thing you've argued about with yourself?",
+  "Have you ever pretended to get a phone call to escape a conversation?",
+  "What's the most random skill you have that serves no purpose?",
+  "Have you ever talked to an inanimate object and genuinely expected a response?",
+  "What's the most dramatic text you've ever typed and then deleted?",
+  "Have you ever convinced yourself a mild inconvenience was a catastrophe?",
+  "What's the weirdest thing you've done when home alone?",
+  "Have you ever done something embarrassing in front of a pet?",
+  "What's the most unnecessary thing you've ever bought?",
+  "Have you ever spent hours doing something completely pointless and felt satisfied?",
 ];
 
 const dares = [
+  // ── Messaging Dares ──
   "Send a message to someone you haven't spoken to in months saying 'I miss you.'",
-  "Change your nickname to something the group decides for the next 10 minutes.",
-  "Type the next message you send with your elbows only.",
   "Send a voice message saying 'I am a professional cheese taster' in the most serious tone.",
-  "Change your profile picture to whatever the group decides for 30 minutes.",
-  "Write a love poem about a random object near you and post it here.",
-  "Send the 5th photo in your camera roll without looking at it first.",
-  "Type everything in this chat in ALL CAPS for the next 5 minutes.",
   "Send a message to your best friend saying 'We need to talk' and wait for their reaction.",
   "Post the last thing you copy-pasted without checking what it is.",
-  "Send a voice message doing your best impression of a robot.",
-  "Type the next 3 messages you send backwards.",
-  "Screenshot your most recent chat and post it here (no cheating, first one you open).",
-  "Send a sincere compliment to every person currently active in this server.",
-  "Post the first result when you Google image search your name.",
-  "Write a 3-sentence horror story right now in this chat.",
   "Send a message to a family member asking for their favourite joke.",
-  "Do your best to type the alphabet backwards in under 30 seconds.",
-  "Send a voice message speaking in the accent of a country the group picks.",
-  "Post the last song you listened to and write one sentence defending why it's a masterpiece.",
-  "Write a product review for your chair right now as if it's the best chair ever made.",
-  "Change your status to whatever the group decides for 15 minutes.",
   "Send a message to someone saying 'Can you keep a secret?' and leave them on read.",
-  "In your next 5 messages, start every sentence with the word 'Nevertheless'.",
-  "Describe what you're wearing right now as if it's high fashion.",
-  "Send a voice message where you narrate everything around you like a nature documentary.",
-  "Post your most recent emoji reaction and explain what you were reacting to.",
-  "Write a two-sentence biography of yourself in third person.",
   "Send 'brb, fighting a bear' to a random contact and show the reaction.",
-  "Type everything with no vowels for the next 3 minutes.",
-  "Do your best impression of a Shakespearean character for one message.",
-  "Post the 10th song on your most played playlist.",
-  "Create a new server nickname for yourself based on your current mood.",
-  "Send a voice message singing the first line of a song the group picks.",
-  "Write an angry 1-star review of a made-up restaurant called 'The Soggy Napkin'.",
-  "Talk in rhymes for your next 5 messages.",
+  "Send a message to someone saying 'I just saw something that reminded me of you' and leave it at that.",
+  "Send a sincere compliment to every person currently active in this server.",
   "Send a wholesome message to the person who most recently messaged in this chat.",
-  "Post your honest opinion of the last movie you watched in exactly 10 words.",
-  "Write what you think everyone in the group's superpower would be.",
+  "Send a voice message doing your best impression of a robot.",
+  "Send a voice message speaking in the accent of a country the group picks.",
+  "Send a voice message where you narrate everything around you like a nature documentary.",
   "Send a voice message giving a motivational speech about brushing your teeth.",
-  "Post your lockscreen wallpaper right now no swapping.",
-  "Write a haiku about whatever is directly in front of you.",
-  "Send the most dramatic possible response to 'How are you?'",
-  "Describe your last dream as if it was a blockbuster movie plot.",
-  "Post the most recent meme or image saved on your phone.",
-  "Write a formal complaint letter about something completely trivial.",
   "Send a voice message doing your best villain monologue.",
+  "Send a voice message doing a weather forecast for your current location.",
+  "Send a voice message telling a knock-knock joke the group picks.",
+  "Send a voice message doing a fake advertisement for the last thing you bought.",
+  "Send a voice message singing the first line of a song the group picks.",
+  "Send a voice message whispering dramatically as if you're hiding from someone.",
+  // ── Typing Challenges ──
+  "Type the next message you send with your elbows only.",
+  "Type everything in this chat in ALL CAPS for the next 5 minutes.",
+  "Type the next 3 messages you send backwards.",
+  "Do your best to type the alphabet backwards in under 30 seconds.",
+  "In your next 5 messages, start every sentence with the word 'Nevertheless'.",
+  "Type everything with no vowels for the next 3 minutes.",
+  "Talk in rhymes for your next 5 messages.",
+  "Type everything like you're an 18th century aristocrat for 5 minutes.",
+  "Send a message entirely in questions.",
+  "Type your next message using only punctuation and emojis — no letters.",
+  "Type everything as if you're texting with one eye closed for the next 3 minutes.",
+  "Write your next 3 messages in the style of a news reporter.",
+  "Type everything for 5 minutes as if you're extremely confused about everything.",
+  "Write a message using only words that start with the same letter.",
+  "For the next 5 minutes, end every sentence with 'and that's the tea.'",
+  // ── Creative Writing ──
+  "Write a 3-sentence horror story right now in this chat.",
+  "Write a love poem about a random object near you and post it here.",
+  "Write a product review for your chair right now as if it's the best chair ever made.",
+  "Write a two-sentence biography of yourself in third person.",
+  "Write an angry 1-star review of a made-up restaurant called 'The Soggy Napkin'.",
+  "Write a haiku about whatever is directly in front of you.",
+  "Write a formal complaint letter about something completely trivial.",
   "Come up with a company slogan for yourself as a product.",
   "Write a news headline about something that happened to you today.",
-  "Send a heartfelt thank you note to your WiFi router.",
-  "Describe the plot of a movie using only emojis.",
-  "Post the most recent notification on your phone (screenshot it).",
+  "Write a heartfelt thank you note to your WiFi router.",
   "Write a one-sentence pitch for a terrible business idea.",
-  "Send a voice message whispering dramatically as if you're hiding from someone.",
-  "Type everything like you're an 18th century aristocrat for 5 minutes.",
-  "Write a Twitter-style thread (3 messages) about your morning routine.",
-  "Send a message to someone saying 'I just saw something that reminded me of you' and leave it at that.",
-  "Post a fun fact you actually know off the top of your head.",
-  "Write a job listing for your current mood as if it's a position to fill.",
-  "Send a voice message doing a weather forecast for your current location.",
   "Invent a new word and use it in a sentence.",
   "Write a strongly worded letter to the concept of Mondays.",
-  "Send a message entirely in questions.",
-  "Describe the last thing you ate as if you're a food critic.",
-  "Write a 4-line rap about the server you're in right now.",
-  "Post your wifi name (no password obviously).",
-  "Send a voice message telling a knock-knock joke the group picks.",
-  "Write an inspirational quote but make it about something totally mundane.",
-  "Post a totally honest review of your own personality in 3 sentences.",
-  "Send a message complimenting something specific about each person who's been active today.",
-  "Describe yourself using only the titles of movies.",
+  "Write a Twitter-style thread (3 messages) about your morning routine.",
+  "Write a job listing for your current mood as if it's a position to fill.",
   "Write a dramatic monologue about running out of phone battery.",
-  "Send a voice message doing a fake advertisement for the last thing you bought.",
   "Write your own obituary but make it funny.",
-  "Type your next message using only punctuation and emojis — no letters.",
-  "Send a message that sounds like the beginning of a spy novel.",
+  "Write a 4-line rap about the server you're in right now.",
+  "Write an inspirational quote but make it about something totally mundane.",
+  "Write a totally honest review of your own personality in 3 sentences.",
+  "Write a movie trailer narration for your morning routine.",
+  "Write a strongly worded Yelp review of your own bedroom.",
+  "Write a children's book summary about your last argument.",
+  "Write a formal apology letter to your future self.",
+  "Write a motivational speech for someone who just burned their toast.",
+  // ── Profile & Media ──
+  "Change your nickname to something the group decides for the next 10 minutes.",
+  "Change your profile picture to whatever the group decides for 30 minutes.",
+  "Screenshot your most recent chat and post it here (no cheating, first one you open).",
+  "Post the 5th photo in your camera roll without looking at it first.",
+  "Post the last song you listened to and write one sentence defending why it's a masterpiece.",
+  "Change your status to whatever the group decides for 15 minutes.",
+  "Post your most recent emoji reaction and explain what you were reacting to.",
+  "Post the 10th song on your most played playlist.",
+  "Post your lockscreen wallpaper right now no swapping.",
+  "Post the most recent meme or image saved on your phone.",
+  "Post your wifi name (no password obviously).",
+  "Post a totally honest review of your own personality in 3 sentences.",
+  "Post your most recent notification (screenshot it).",
+  "Post the first result when you Google image search your name.",
   "Post the strangest notification you've gotten today.",
+  "Post a fun fact you actually know off the top of your head.",
+  "Post your honest opinion of the last movie you watched in exactly 10 words.",
+  // ── Performance & Roleplay ──
+  "Do your best impression of a Shakespearean character for one message.",
+  "Do your best to type the alphabet backwards in under 30 seconds.",
+  "Describe what you're wearing right now as if it's high fashion.",
+  "Send the most dramatic possible response to 'How are you?'",
+  "Describe your last dream as if it was a blockbuster movie plot.",
+  "Describe the plot of a movie using only emojis.",
+  "Describe the last thing you ate as if you're a food critic.",
+  "Describe yourself using only the titles of movies.",
+  "Write what you think everyone in the group's superpower would be.",
+  "Do your best impression of a news anchor for one message.",
+  "Pretend you're a customer service bot for the next 3 messages.",
+  "Speak as if you're narrating a cooking show for the next 2 messages.",
+  "Narrate everything you're doing right now like a sports commentator in one message.",
+  "Give a TED talk summary in 3 sentences about why your favourite food is the best.",
+  "Pitch a ridiculous startup idea with full confidence in one paragraph.",
+  "Explain how to make a sandwich as if it's rocket science.",
+  "Describe your personality as if you're a character in a video game.",
+  "Give a dramatic reading of the last text message you received.",
+  "Announce your entrance to the chat as if you're a professional wrestler.",
+  "Roleplay as a medieval knight who has just discovered the internet.",
+  // ── Social & Interaction ──
+  "Compliment something specific about each person who's been active today.",
+  "Send a message complimenting something specific about each person who's been active today.",
+  "Give everyone in the server a superhero name based on their personality.",
+  "Assign a spirit animal to every active person in the chat right now.",
+  "Write a one-sentence roast of yourself and post it.",
+  "Write a one-sentence hype message about every active person in this chat.",
+  "Give the person above you an honest compliment in exactly 10 words.",
+  "Ask the group a would-you-rather question that has no good answer.",
+  "Tell the group something genuinely surprising about yourself.",
+  "Ask the chat the most random question you can think of.",
+  "Give a shoutout to someone in the server and say why they're awesome.",
+  "Let the chat rename you for 10 minutes — no backsies.",
+  "Ask the group to rate your vibe out of 10.",
+  "Tell the chat what your role would be in a heist movie.",
+  "Let the person above you assign you a dare from this list.",
+  // ── Random & Weird ──
+  "Create a new server nickname for yourself based on your current mood.",
+  "Send a message that sounds like the beginning of a spy novel.",
+  "Describe your most recent purchase as if it changed your life forever.",
+  "Make up a conspiracy theory about why the sky is blue and post it.",
+  "Give a step-by-step guide to doing something you've never done.",
+  "Invent a new holiday and explain how it's celebrated.",
+  "Write the rules of a sport you just made up.",
+  "Explain a basic life skill as if it's an ancient lost art.",
+  "Write a fake Wikipedia intro for yourself.",
+  "Create a secret handshake description using only words.",
+  "Invent a new emoji and describe what it looks like and means.",
+  "Write a fake fortune cookie message for every active person in chat.",
+  "Come up with a band name and their worst album title.",
+  "Describe your current mood as a weather forecast.",
+  "Write a fake movie spoiler for a film that doesn't exist.",
 ];
 
-function getRandomTD(type) {
+function getRandomTD() {
+  const isTruth = Math.random() < 0.5;
+  return isTruth
+    ? { type: 'Truth', question: truths[Math.floor(Math.random() * truths.length)], color: 0x5865F2 }
+    : { type: 'Dare', question: dares[Math.floor(Math.random() * dares.length)], color: 0xff3b3b };
+}
+
+function getTypedTD(type) {
   if (type === 'truth') {
     return { type: 'Truth', question: truths[Math.floor(Math.random() * truths.length)], color: 0x5865F2 };
-  } else if (type === 'dare') {
-    return { type: 'Dare', question: dares[Math.floor(Math.random() * dares.length)], color: 0xff3b3b };
   } else {
-    const isTruth = Math.random() < 0.5;
-    return isTruth
-      ? { type: 'Truth', question: truths[Math.floor(Math.random() * truths.length)], color: 0x5865F2 }
-      : { type: 'Dare', question: dares[Math.floor(Math.random() * dares.length)], color: 0xff3b3b };
+    return { type: 'Dare', question: dares[Math.floor(Math.random() * dares.length)], color: 0xff3b3b };
   }
 }
 
@@ -263,14 +369,14 @@ function makeTDEmbed(data, member) {
       iconURL: member.user.displayAvatarURL()
     })
     .setDescription(`${data.type === 'Truth' ? '🔵' : '🔴'} ${data.question}`)
-    .setFooter({ text: `${data.type === 'Truth' ? '75 Truths' : '75 Dares'} in the pool — use .t / .d / .td` })
+    .setFooter({ text: `${truths.length} Truths · ${dares.length} Dares in the pool — use .t / .d / .td` })
     .setTimestamp();
 }
 
-function makeTDRow(type, invokerId) {
+function makeTDRow(invokerId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`td_reroll_${type}_${invokerId}`)
+      .setCustomId(`td_reroll_${invokerId}`)
       .setLabel('🔄 Reroll')
       .setStyle(ButtonStyle.Secondary),
     makeDeleteBtn(invokerId)
@@ -1443,10 +1549,9 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
 
   // ─── TRUTH & DARE ────────────────────────────────────────
   if (command === 'td' || command === 't' || command === 'd') {
-    const type = command === 't' ? 'truth' : command === 'd' ? 'dare' : 'random';
-    const data = getRandomTD(type);
+    const data = command === 't' ? getTypedTD('truth') : command === 'd' ? getTypedTD('dare') : getRandomTD();
     const embed = makeTDEmbed(data, message.member);
-    const row = makeTDRow(data.type.toLowerCase(), invokerId);
+    const row = makeTDRow(invokerId);
     message.channel.send({ embeds: [embed], components: [row] });
   }
 
@@ -1523,11 +1628,10 @@ client.on('interactionCreate', async interaction => {
 
     // ─── TD REROLL ────────────────────────────────────────
     if (customId.startsWith('td_reroll_')) {
-      const tdType = parts[2]; // 'truth' or 'dare'
-      const data = getRandomTD(tdType);
+      const data = getRandomTD();
       const member = interaction.member;
       const embed = makeTDEmbed(data, member);
-      const row = makeTDRow(data.type.toLowerCase(), embeddedInvokerId);
+      const row = makeTDRow(embeddedInvokerId);
       return interaction.update({ embeds: [embed], components: [row] });
     }
 
