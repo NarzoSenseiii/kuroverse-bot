@@ -23,15 +23,23 @@ const client = new Client({
 const prefix = ".";
 const fs = require('fs');
 const WARNS_FILE = './warnings.json';
+const MARRY_FILE = './marriages.json';
 const afkMap = new Map();
 
 function loadWarns() {
   if (!fs.existsSync(WARNS_FILE)) return {};
   return JSON.parse(fs.readFileSync(WARNS_FILE, 'utf8'));
 }
-
 function saveWarns(data) {
   fs.writeFileSync(WARNS_FILE, JSON.stringify(data, null, 2));
+}
+
+function loadMarriages() {
+  if (!fs.existsSync(MARRY_FILE)) return {};
+  return JSON.parse(fs.readFileSync(MARRY_FILE, 'utf8'));
+}
+function saveMarriages(data) {
+  fs.writeFileSync(MARRY_FILE, JSON.stringify(data, null, 2));
 }
 
 function parseTime(time) {
@@ -80,10 +88,8 @@ async function resolveMember(guild, arg) {
   catch { return null; }
 }
 
-
 // ─── TRUTH & DARE DATA ───────────────────────────────────────
 const truths = [
-  // ── Personal & Embarrassing ──
   "What's the most embarrassing thing you've ever done in public?",
   "Have you ever lied to get out of trouble? What was the lie?",
   "What's the most childish thing you still do?",
@@ -124,7 +130,6 @@ const truths = [
   "Have you ever gotten lost somewhere embarrassingly simple?",
   "What's a show or movie you're ashamed to admit you loved?",
   "Have you ever made a promise you knew you wouldn't keep?",
-  // ── Opinions & Preferences ──
   "What's the most ridiculous fear you have?",
   "Have you ever laughed so hard something came out of your nose?",
   "What's the worst fashion choice you've ever made?",
@@ -155,7 +160,6 @@ const truths = [
   "Have you ever pretended to know a celebrity or famous person?",
   "What's the worst trouble you've gotten into as a kid?",
   "Have you ever screamed at a video game in public?",
-  // ── Deep & Reflective ──
   "What's the most ridiculous argument you've had with a sibling or friend?",
   "Have you ever been caught talking to yourself?",
   "What's the most embarrassing thing your parents have caught you doing?",
@@ -186,7 +190,6 @@ const truths = [
   "Have you ever convinced yourself you were good at something you really weren't?",
   "What's the most embarrassing thing you've done to get someone's attention?",
   "Have you ever regretted telling someone a secret?",
-  // ── Fun & Random ──
   "What's the weirdest food combination you actually enjoy?",
   "Have you ever laughed at a completely inappropriate time?",
   "What's the most over-the-top reaction you've had to something minor?",
@@ -210,7 +213,6 @@ const truths = [
 ];
 
 const dares = [
-  // ── Messaging Dares ──
   "Send a message to someone you haven't spoken to in months saying 'I miss you.'",
   "Send a voice message saying 'I am a professional cheese taster' in the most serious tone.",
   "Send a message to your best friend saying 'We need to talk' and wait for their reaction.",
@@ -231,7 +233,6 @@ const dares = [
   "Send a voice message doing a fake advertisement for the last thing you bought.",
   "Send a voice message singing the first line of a song the group picks.",
   "Send a voice message whispering dramatically as if you're hiding from someone.",
-  // ── Typing Challenges ──
   "Type the next message you send with your elbows only.",
   "Type everything in this chat in ALL CAPS for the next 5 minutes.",
   "Type the next 3 messages you send backwards.",
@@ -247,7 +248,6 @@ const dares = [
   "Type everything for 5 minutes as if you're extremely confused about everything.",
   "Write a message using only words that start with the same letter.",
   "For the next 5 minutes, end every sentence with 'and that's the tea.'",
-  // ── Creative Writing ──
   "Write a 3-sentence horror story right now in this chat.",
   "Write a love poem about a random object near you and post it here.",
   "Write a product review for your chair right now as if it's the best chair ever made.",
@@ -273,7 +273,6 @@ const dares = [
   "Write a children's book summary about your last argument.",
   "Write a formal apology letter to your future self.",
   "Write a motivational speech for someone who just burned their toast.",
-  // ── Profile & Media ──
   "Change your nickname to something the group decides for the next 10 minutes.",
   "Change your profile picture to whatever the group decides for 30 minutes.",
   "Screenshot your most recent chat and post it here (no cheating, first one you open).",
@@ -291,9 +290,7 @@ const dares = [
   "Post the strangest notification you've gotten today.",
   "Post a fun fact you actually know off the top of your head.",
   "Post your honest opinion of the last movie you watched in exactly 10 words.",
-  // ── Performance & Roleplay ──
   "Do your best impression of a Shakespearean character for one message.",
-  "Do your best to type the alphabet backwards in under 30 seconds.",
   "Describe what you're wearing right now as if it's high fashion.",
   "Send the most dramatic possible response to 'How are you?'",
   "Describe your last dream as if it was a blockbuster movie plot.",
@@ -312,7 +309,6 @@ const dares = [
   "Give a dramatic reading of the last text message you received.",
   "Announce your entrance to the chat as if you're a professional wrestler.",
   "Roleplay as a medieval knight who has just discovered the internet.",
-  // ── Social & Interaction ──
   "Compliment something specific about each person who's been active today.",
   "Send a message complimenting something specific about each person who's been active today.",
   "Give everyone in the server a superhero name based on their personality.",
@@ -328,7 +324,6 @@ const dares = [
   "Ask the group to rate your vibe out of 10.",
   "Tell the chat what your role would be in a heist movie.",
   "Let the person above you assign you a dare from this list.",
-  // ── Random & Weird ──
   "Create a new server nickname for yourself based on your current mood.",
   "Send a message that sounds like the beginning of a spy novel.",
   "Describe your most recent purchase as if it changed your life forever.",
@@ -364,10 +359,7 @@ function getTypedTD(type) {
 function makeTDEmbed(data, member) {
   return new EmbedBuilder()
     .setColor(data.color)
-    .setAuthor({
-      name: `${data.type} — ${member.displayName}`,
-      iconURL: member.user.displayAvatarURL()
-    })
+    .setAuthor({ name: `${data.type} — ${member.displayName}`, iconURL: member.user.displayAvatarURL() })
     .setDescription(`${data.type === 'Truth' ? '🔵' : '🔴'} ${data.question}`)
     .setFooter({ text: `${truths.length} Truths · ${dares.length} Dares in the pool — use .t / .d / .td` })
     .setTimestamp();
@@ -375,10 +367,7 @@ function makeTDEmbed(data, member) {
 
 function makeTDRow(invokerId) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`td_reroll_${invokerId}`)
-      .setLabel('🔄 Reroll')
-      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`td_reroll_${invokerId}`).setLabel('🔄 Reroll').setStyle(ButtonStyle.Secondary),
     makeDeleteBtn(invokerId)
   );
 }
@@ -393,7 +382,7 @@ async function sendLog(guild, embed) {
 }
 
 // ─── ANTI-SPAM ───────────────────────────────────────────────
-let antiSpamEnabled = false;
+let antiSpamEnabled = true; // ON by default
 const spamMap = new Map();
 const OWNER_ID = '1212375999132467270';
 
@@ -493,11 +482,11 @@ const helpPages = [
     .setAuthor({ name: `${guild.name} — Command Help`, iconURL: guild.iconURL() })
     .setDescription(
       `Welcome to the help menu! Use the buttons below to browse categories.\n\n` +
-      `**Prefix:** \`.\`  •  **Total Commands:** 30\n\n` +
+      `**Prefix:** \`.\`  •  **Total Commands:** 32\n\n` +
       `> <:user:1487021741720076309> **Utility** — Info, avatar, purge & more\n` +
       `> <:moderator:1487021865682735225> **Moderation** — Ban, kick, mute, unmute & more\n` +
       `> <:warn:1487084599296135311> **Warnings** — Warn, view, clear, warnlist & more\n` +
-      `> 🎉 **Fun** — Ship, poll, truth or dare, gay meter & more`
+      `> 🎉 **Fun** — Ship, poll, truth or dare, marry & more`
     )
     .setFooter({ text: 'Page 1 of 5  •  Overview' })
     .setTimestamp(),
@@ -515,7 +504,7 @@ const helpPages = [
       { name: '🎲  `.choose <option1> or <option2>`', value: '> Let the bot pick between two or more options for you.' },
       { name: '<:reason:1487022066644291614>  `.afk [reason]`', value: '> Set yourself as AFK. Others who ping you will be notified. Auto-removed when you chat.' },
       { name: '🏓  `.ping`', value: '> Check if the bot is online.' },
-      { name: '🖼️  `.steal <name>`', value: '> Reply to a message containing an emoji or sticker to add it to the server. **Admin only.**' }
+      { name: '🖼️  `.steal <n>`', value: '> Reply to a message containing an emoji or sticker to add it to the server. **Admin only.**' }
     )
     .setFooter({ text: 'Page 2 of 5  •  Utility' })
     .setTimestamp(),
@@ -534,7 +523,7 @@ const helpPages = [
       { name: '🔓  `.unlock`', value: '> Restore message permissions in the current channel.' },
       { name: '✏️  `.nick <user> <nickname>`', value: '> Change a member\'s nickname.' },
       { name: '🎭  `.role <user> <role>`', value: '> Assign or remove a role from a member. Toggles automatically.' },
-      { name: '🛡️  `.as`', value: '> Toggle the anti-spam system on/off. Requires **Administrator**.' },
+      { name: '🛡️  `.as`', value: '> Toggle the anti-spam system on/off. **On by default.** Requires **Administrator**.' },
       { name: '🔨  `.banlist`', value: '> View all currently banned users in the server. Requires **Ban Members**.' }
     )
     .setFooter({ text: 'Page 3 of 5  •  Moderation' })
@@ -566,7 +555,9 @@ const helpPages = [
       { name: '💘  `.ship <user1> <user2>`', value: '> Calculate the ship compatibility between two members.' },
       { name: '📊  `.poll <question>`', value: '> Post a poll with ✅ / ❌ reactions. Anyone can vote.' },
       { name: '🎭  `.td`  /  `.t`  /  `.d`', value: '> Get a random **Truth or Dare**. Use `.t` for truth only, `.d` for dare only.' },
-      { name: '🌈  `.gay <user>`  /  `.howgay <user>`', value: '> Check how gay someone is. Results may vary.' }
+      { name: '🌈  `.gay <user>`  /  `.howgay <user>`', value: '> Check how gay someone is. Results may vary.' },
+      { name: '💍  `.marry <user>`', value: '> Propose to another member! They\'ll get an Accept / Decline button. Also works by replying to their message with `.marry`.' },
+      { name: '💔  `.divorce`', value: '> End your current marriage. Sad but valid.' }
     )
     .setFooter({ text: 'Page 5 of 5  •  Fun' })
     .setTimestamp(),
@@ -648,12 +639,11 @@ client.on('messageCreate', async message => {
   // ─── HELP ────────────────────────────────────────────────
   if (command === 'help') {
     const sub = args[1]?.toLowerCase();
-    // 0=Overview, 1=Utility, 2=Moderation, 3=Warnings, 4=Fun
     let page = 0;
-    if (sub === 'util' || sub === 'utility')                              page = 1;
-    else if (sub === 'mod' || sub === 'moderation')                       page = 2;
-    else if (sub === 'warn' || sub === 'warnings' || sub === 'warning')   page = 3;
-    else if (sub === 'fun')                                               page = 4;
+    if (sub === 'util' || sub === 'utility')                             page = 1;
+    else if (sub === 'mod' || sub === 'moderation')                      page = 2;
+    else if (sub === 'warn' || sub === 'warnings' || sub === 'warning')  page = 3;
+    else if (sub === 'fun')                                              page = 4;
 
     const embed = helpPages[page](message.guild);
     const row = makeHelpRow(page, invokerId);
@@ -730,7 +720,6 @@ client.on('messageCreate', async message => {
           { name: 'Duration', value: timeArg, inline: true },
           { name: 'Reason', value: reason }
         ).setTimestamp());
-
     } catch (err) { console.error(err); message.reply("Error muting user."); }
   }
 
@@ -1564,7 +1553,6 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       .setTimestamp());
   }
 
-
   // ─── TRUTH & DARE ────────────────────────────────────────
   if (command === 'td' || command === 't' || command === 'd') {
     const data = command === 't' ? getTypedTD('truth') : command === 'd' ? getTypedTD('dare') : getRandomTD();
@@ -1595,9 +1583,8 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       if (!user1 || user1.id === user2?.id || !user2) return message.reply('Mention two different users. Usage: `.ship @user1 @user2`');
 
       const pct = Math.floor(Math.random() * 101);
-
       const filled = Math.round(pct / 10);
-      const bar    = '💗'.repeat(filled) + '🖤'.repeat(10 - filled);
+      const bar = '💗'.repeat(filled) + '🖤'.repeat(10 - filled);
 
       let verdict;
       if (pct >= 90)      verdict = '💞 Soulmates. Undeniable.';
@@ -1613,12 +1600,7 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       const embed = new EmbedBuilder()
         .setColor(0xff6b9d)
         .setAuthor({ name: '💘 Ship Calculator', iconURL: message.guild.iconURL() })
-        .setDescription(`**${user1.username}** & **${user2.username}**
-
-${bar}
-
-**${pct}% compatibility**
-${verdict}`)
+        .setDescription(`**${user1.username}** & **${user2.username}**\n\n${bar}\n\n**${pct}% compatibility**\n${verdict}`)
         .addFields(
           { name: '👫 Ship Name', value: `**${shipName}**`, inline: true },
           { name: '❤️ Score',     value: `**${pct}/100**`,  inline: true }
@@ -1643,8 +1625,8 @@ ${verdict}`)
         .setAuthor({ name: '📊 Poll', iconURL: message.guild.iconURL() })
         .setDescription(`**${question}**`)
         .addFields(
-          { name: '<:tick:1487030751550509066> Yes',  value: '​', inline: true },
-          { name: '<:flash:1487027526394974218> No',  value: '​', inline: true }
+          { name: '<:tick:1487030751550509066> Yes', value: '​', inline: true },
+          { name: '<:flash:1487027526394974218> No', value: '​', inline: true }
         )
         .setFooter({ text: `Poll by ${message.member.displayName}`, iconURL: message.author.displayAvatarURL() })
         .setTimestamp();
@@ -1653,6 +1635,144 @@ ${verdict}`)
       await pollMsg.react('<:tick:1487030751550509066>');
       await pollMsg.react('<:flash:1487027526394974218>');
     } catch (err) { console.error(err); message.reply('Error creating poll.'); }
+  }
+
+  // ─── MARRY ───────────────────────────────────────────────
+  if (command === 'marry') {
+    try {
+      // Resolve target: mention in args OR replied-to message's author
+      let target;
+      if (args[1]) {
+        target = await resolveMember(message.guild, args[1]);
+      } else if (message.reference) {
+        const replied = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+        if (replied) target = await message.guild.members.fetch(replied.author.id).catch(() => null);
+      }
+
+      if (!target) {
+        return message.channel.send({ embeds: [new EmbedBuilder()
+          .setColor(0xff3b3b)
+          .setAuthor({ name: 'Missing Target' })
+          .setDescription('<:flash:1487027526394974218> **Mention someone or reply to their message to propose!**\n\nUsage: `.marry @user` or reply to their message with `.marry`')
+          .setTimestamp()],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
+      if (target.id === message.author.id) {
+        return message.channel.send({ embeds: [new EmbedBuilder()
+          .setColor(0xff3b3b)
+          .setAuthor({ name: 'Nice Try 💀' })
+          .setDescription('<:flash:1487027526394974218> **You can\'t marry yourself.**')
+          .setTimestamp()],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
+      if (target.user.bot) {
+        return message.channel.send({ embeds: [new EmbedBuilder()
+          .setColor(0xff3b3b)
+          .setAuthor({ name: 'Nice Try 💀' })
+          .setDescription('<:flash:1487027526394974218> **You can\'t marry a bot.**')
+          .setTimestamp()],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
+      const marriages = loadMarriages();
+      const guildKey = message.guild.id;
+      if (!marriages[guildKey]) marriages[guildKey] = {};
+
+      if (marriages[guildKey][message.author.id]) {
+        const spouseId = marriages[guildKey][message.author.id];
+        return message.channel.send({ embeds: [new EmbedBuilder()
+          .setColor(0xff3b3b)
+          .setAuthor({ name: 'Already Married 💍' })
+          .setDescription(`<:flash:1487027526394974218> **You are already married to <@${spouseId}>!**\n\nUse \`.divorce\` first if you want to remarry.`)
+          .setTimestamp()],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
+      if (marriages[guildKey][target.id]) {
+        const spouseId = marriages[guildKey][target.id];
+        return message.channel.send({ embeds: [new EmbedBuilder()
+          .setColor(0xff3b3b)
+          .setAuthor({ name: 'Already Taken 💔' })
+          .setDescription(`<:flash:1487027526394974218> **<@${target.id}> is already married to <@${spouseId}>!**`)
+          .setTimestamp()],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
+      const proposalEmbed = new EmbedBuilder()
+        .setColor(0xff6b9d)
+        .setAuthor({ name: '💍 Marriage Proposal!', iconURL: message.author.displayAvatarURL() })
+        .setDescription(
+          `<@${message.author.id}> has proposed to <@${target.id}>! 💍\n\n` +
+          `**<@${target.id}>, do you accept?**\n\n` +
+          `_This proposal expires in 60 seconds._`
+        )
+        .setThumbnail(target.user.displayAvatarURL())
+        .setTimestamp();
+
+      const proposalRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`marry_accept_${message.author.id}_${target.id}`)
+          .setLabel('💍 Accept')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`marry_decline_${message.author.id}_${target.id}`)
+          .setLabel('💔 Decline')
+          .setStyle(ButtonStyle.Danger)
+      );
+
+      const proposalMsg = await message.channel.send({ embeds: [proposalEmbed], components: [proposalRow] });
+
+      // Auto-expire after 60 seconds
+      setTimeout(async () => {
+        const current = await proposalMsg.fetch().catch(() => null);
+        if (!current || !current.components?.length) return;
+        const expiredEmbed = new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setAuthor({ name: '💍 Proposal Expired', iconURL: message.author.displayAvatarURL() })
+          .setDescription(`<@${message.author.id}>'s proposal to <@${target.id}> has expired. 💨`)
+          .setTimestamp();
+        proposalMsg.edit({ embeds: [expiredEmbed], components: [] }).catch(() => {});
+      }, 60000);
+
+    } catch (err) { console.error(err); message.reply('Error running marry command.'); }
+  }
+
+  // ─── DIVORCE ─────────────────────────────────────────────
+  if (command === 'divorce') {
+    try {
+      const marriages = loadMarriages();
+      const guildKey = message.guild.id;
+
+      if (!marriages[guildKey]?.[message.author.id]) {
+        return message.channel.send({ embeds: [new EmbedBuilder()
+          .setColor(0xff3b3b)
+          .setAuthor({ name: 'Not Married' })
+          .setDescription('<:flash:1487027526394974218> **You\'re not married to anyone!**')
+          .setTimestamp()],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
+      const spouseId = marriages[guildKey][message.author.id];
+      delete marriages[guildKey][message.author.id];
+      delete marriages[guildKey][spouseId];
+      saveMarriages(marriages);
+
+      const embed = new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setAuthor({ name: '💔 Divorced', iconURL: message.author.displayAvatarURL() })
+        .setDescription(`<@${message.author.id}> and <@${spouseId}> are no longer married. 💔`)
+        .setTimestamp();
+
+      message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+    } catch (err) { console.error(err); message.reply('Error running divorce command.'); }
   }
 
   // ─── BANLIST ─────────────────────────────────────────────
@@ -1741,7 +1861,6 @@ ${verdict}`)
     try {
       const target = message.mentions.members.first() || message.member;
       const pct    = Math.floor(Math.random() * 101);
-
       const filled = Math.round(pct / 10);
       const bar    = '🌈'.repeat(filled) + '⬛'.repeat(10 - filled);
 
@@ -1781,17 +1900,16 @@ ${verdict}`)
       }
 
       if (!message.reference) {
-        return message.reply('You need to **reply to a message** that contains a custom emoji or sticker. Usage: `.steal <name>`');
+        return message.reply('You need to **reply to a message** that contains a custom emoji or sticker. Usage: `.steal <n>`');
       }
 
       const emojiName = args[1];
       if (!emojiName || !/^[a-zA-Z0-9_]+$/.test(emojiName)) {
-        return message.reply('Provide a valid name (letters, numbers, underscores only). Usage: `.steal <name>`');
+        return message.reply('Provide a valid name (letters, numbers, underscores only). Usage: `.steal <n>`');
       }
 
       const replied = await message.channel.messages.fetch(message.reference.messageId);
 
-      // ── Check for sticker first ──
       if (replied.stickers?.size > 0) {
         const sticker = replied.stickers.first();
         if (sticker.format === 3) return message.reply('Lottie (animated) stickers cannot be stolen — Discord restriction.');
@@ -1814,7 +1932,6 @@ ${verdict}`)
         }
       }
 
-      // ── Check for custom emoji in message content ──
       const emojiMatch = replied.content.match(/<a?:([^:]+):(\d+)>/);
       if (!emojiMatch) {
         return message.reply('No custom emoji or sticker found in that message. Only custom emojis can be stolen (not default ones).');
@@ -1840,7 +1957,6 @@ ${verdict}`)
 
     } catch (err) { console.error(err); message.reply('Error running steal command.'); }
   }
-
 
 });
 
@@ -1868,7 +1984,6 @@ client.on('interactionCreate', async interaction => {
         });
       }
 
-      // customId: help_action_currentPage_invokerId
       const action = parts[1];
       const currentPage = parseInt(parts[2]);
       let newPage = currentPage;
@@ -1879,8 +1994,67 @@ client.on('interactionCreate', async interaction => {
 
       const embed = helpPages[newPage](interaction.guild);
       const row = makeHelpRow(newPage, embeddedInvokerId);
-
       return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // ─── MARRY ACCEPT / DECLINE ───────────────────────────
+    if (customId.startsWith('marry_accept_') || customId.startsWith('marry_decline_')) {
+      // customId: marry_accept_proposerId_targetId
+      const proposerId = parts[2];
+      const targetId   = parts[3];
+
+      if (interaction.user.id !== targetId) {
+        return interaction.reply({
+          embeds: [new EmbedBuilder()
+            .setColor(0xff3b3b)
+            .setAuthor({ name: 'Not For You 💍' })
+            .setDescription('<:flash:1487027526394974218> **Only the person being proposed to can respond to this.**')
+            .setTimestamp()],
+          ephemeral: true
+        });
+      }
+
+      if (customId.startsWith('marry_decline_')) {
+        const declinedEmbed = new EmbedBuilder()
+          .setColor(0xff3b3b)
+          .setAuthor({ name: '💔 Proposal Declined', iconURL: interaction.user.displayAvatarURL() })
+          .setDescription(`<@${targetId}> has declined <@${proposerId}>'s proposal. 💔`)
+          .setTimestamp();
+        return interaction.update({ embeds: [declinedEmbed], components: [] });
+      }
+
+      // Accept
+      const marriages = loadMarriages();
+      const guildKey  = interaction.guild.id;
+      if (!marriages[guildKey]) marriages[guildKey] = {};
+
+      if (marriages[guildKey][proposerId] || marriages[guildKey][targetId]) {
+        const alreadyEmbed = new EmbedBuilder()
+          .setColor(0xff3b3b)
+          .setAuthor({ name: 'Already Married 💍' })
+          .setDescription('<:flash:1487027526394974218> **One of you is already married to someone else!**')
+          .setTimestamp();
+        return interaction.update({ embeds: [alreadyEmbed], components: [] });
+      }
+
+      marriages[guildKey][proposerId] = targetId;
+      marriages[guildKey][targetId]   = proposerId;
+      saveMarriages(marriages);
+
+      const marriedAt = Math.floor(Date.now() / 1000);
+
+      const acceptedEmbed = new EmbedBuilder()
+        .setColor(0xff6b9d)
+        .setAuthor({ name: '💍 Just Married!', iconURL: interaction.user.displayAvatarURL() })
+        .setDescription(
+          `**<@${proposerId}> & <@${targetId}> are now married!** 🎉\n\n` +
+          `💒 May your days together be blessed.\n` +
+          `💍 Married on <t:${marriedAt}:F>`
+        )
+        .setFooter({ text: 'Use .divorce to end the marriage.' })
+        .setTimestamp();
+
+      return interaction.update({ embeds: [acceptedEmbed], components: [] });
     }
 
     // ─── ALL OTHER BUTTONS ────────────────────────────────
