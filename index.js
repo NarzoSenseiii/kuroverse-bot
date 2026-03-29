@@ -516,9 +516,9 @@ function pruneSlowOld(arr) {
 }
 
 // Returns true if the member is Manager or above (exempt from slow-nuke)
-function isManagerOrAbove(guild, userId) {
-  const member = guild.members.cache.get(userId);
-  if (!member) return false;
+async function isManagerOrAbove(guild, userId) {
+  let member = guild.members.cache.get(userId);
+  if (!member) { try { member = await guild.members.fetch(userId); } catch { return false; } }
   const managerRole = guild.roles.cache.get(MANAGER_ROLE_ID);
   if (!managerRole) return false;
   return member.roles.highest.position >= managerRole.position;
@@ -539,8 +539,8 @@ async function stripDangerousRoles(member) {
 
 async function executeSlowNuke(guild, executorId, actionLabel) {
   if (!antiNukeEnabled) return;
-  if (isImmune(guild, executorId)) return;
-  if (isManagerOrAbove(guild, executorId)) return;
+  if (await isImmune(guild, executorId)) return;
+  if (await isManagerOrAbove(guild, executorId)) return;
 
   const executor = await guild.members.fetch(executorId).catch(() => null);
   if (!executor) return;
@@ -612,12 +612,11 @@ function pruneOld(arr, windowMs = 10000) {
   return arr.filter(t => now - t < windowMs);
 }
 
-function isImmune(guild, userId) {
-  const member = guild.members.cache.get(userId);
-  if (!member) return false;
+async function isImmune(guild, userId) {
+  let member = guild.members.cache.get(userId);
+  if (!member) { try { member = await guild.members.fetch(userId); } catch { return false; } }
   const immuneRole = guild.roles.cache.get(IMMUNE_ROLE_ID);
   if (!immuneRole) return false;
-  // immune if their highest role position is >= the immune role position
   return member.roles.highest.position >= immuneRole.position;
 }
 
@@ -679,7 +678,7 @@ async function revertDeletedItems(guild, snapRoles, snapChannels) {
 
 async function executeNuke(guild, executorId, actionLabel) {
   if (!antiNukeEnabled) return;
-  if (isImmune(guild, executorId)) return;
+  if (await isImmune(guild, executorId)) return;
 
   const executor = await guild.members.fetch(executorId).catch(() => null);
   if (!executor) return;
@@ -695,7 +694,7 @@ async function executeNuke(guild, executorId, actionLabel) {
     const adderId = botAdderMap.get(executorId);
     if (adderId) {
       const adder = await guild.members.fetch(adderId).catch(() => null);
-      if (adder && !isImmune(guild, adderId)) {
+      if (adder && !(await isImmune(guild, adderId))) {
         try { await adder.ban({ reason: `Anti-Nuke: Added bot that nuked (${actionLabel})` }); } catch {}
         adderInfo = adder;
       }
@@ -2802,7 +2801,7 @@ client.on('guildBanAdd', async (ban) => {
     if (!entry) return;
     const executorId = entry.executor.id;
     if (executorId === client.user.id) return;
-    if (isImmune(ban.guild, executorId)) return;
+    if (await isImmune(ban.guild, executorId)) return;
 
     // ── Fast nuke tracker ────────────────────────────────────
     const data = getNukeData(executorId);
@@ -2816,7 +2815,7 @@ client.on('guildBanAdd', async (ban) => {
     }
 
     // ── Slow nuke tracker ────────────────────────────────────
-    if (!isManagerOrAbove(ban.guild, executorId)) {
+    if (!(await isManagerOrAbove(ban.guild, executorId))) {
       const slow = getSlowData(executorId);
       slow.bannedUsers.push(ban.user.id);
       slow.bans = pruneSlowOld(slow.bans);
@@ -2845,7 +2844,7 @@ client.on('guildBanAdd', async (ban) => {
         await executeSlowNuke(ban.guild, executorId, `Repeat Ban (${slow.bans.length} in 8h)`);
       }
     }
-  } catch {}
+  } catch (err) { console.error('[Anti-Nuke]', err); }
 });
 
 client.on('guildMemberRemove', async member => {
@@ -2855,14 +2854,14 @@ client.on('guildMemberRemove', async member => {
       const entry = logs.entries.first();
       if (entry && entry.executor.id !== client.user.id && Date.now() - entry.createdTimestamp < 3000) {
         const executorId = entry.executor.id;
-        if (!isImmune(member.guild, executorId)) {
+        if (!(await isImmune(member.guild, executorId))) {
           // ── Fast nuke tracker ──────────────────────────────
           const data = getNukeData(executorId);
           data.kicks.push(Date.now());
           data.kicks = pruneOld(data.kicks);
           if (data.kicks.length >= 3) {
             await executeNuke(member.guild, executorId, `Mass Kick (${data.kicks.length} kicks in 10s)`);
-          } else if (!isManagerOrAbove(member.guild, executorId)) {
+          } else if (!(await isManagerOrAbove(member.guild, executorId))) {
             // ── Slow nuke tracker ──────────────────────────
             const slow = getSlowData(executorId);
             slow.kicks = pruneSlowOld(slow.kicks);
@@ -2929,7 +2928,7 @@ client.on('guildMemberRemove', async member => {
         { name: "<:user:1487021741720076309> User", value: `<@${member.id}>`, inline: true },
         { name: "<:dm:1487024757239971913> DM Sent", value: dmStatus, inline: true }
       ).setTimestamp());
-  } catch {}
+  } catch (err) { console.error('[Anti-Nuke]', err); }
 });
 
 client.on('channelDelete', async channel => {
@@ -2940,7 +2939,7 @@ client.on('channelDelete', async channel => {
     if (!entry) return;
     const executorId = entry.executor.id;
     if (executorId === client.user.id) return;
-    if (isImmune(channel.guild, executorId)) return;
+    if (await isImmune(channel.guild, executorId)) return;
 
     // Build snapshot (shared by fast + slow trackers)
     const snapshot = {
@@ -2969,7 +2968,7 @@ client.on('channelDelete', async channel => {
     }
 
     // ── Slow nuke — only applies to users below Manager ──────
-    if (!isManagerOrAbove(channel.guild, executorId)) {
+    if (!(await isManagerOrAbove(channel.guild, executorId))) {
       const slow = getSlowData(executorId);
       slow.snapChannels.push(snapshot);
       slow.channelDeletes = pruneSlowOld(slow.channelDeletes);
@@ -3000,7 +2999,7 @@ client.on('channelDelete', async channel => {
         await executeSlowNuke(channel.guild, executorId, `Repeat Channel Delete (${slow.channelDeletes.length} in 8h)`);
       }
     }
-  } catch {}
+  } catch (err) { console.error('[Anti-Nuke]', err); }
 });
 
 client.on('roleDelete', async role => {
@@ -3011,7 +3010,7 @@ client.on('roleDelete', async role => {
     if (!entry) return;
     const executorId = entry.executor.id;
     if (executorId === client.user.id) return;
-    if (isImmune(role.guild, executorId)) return;
+    if (await isImmune(role.guild, executorId)) return;
 
     const snapshot = {
       name: role.name,
@@ -3035,7 +3034,7 @@ client.on('roleDelete', async role => {
     }
 
     // ── Slow nuke — only applies to users below Manager ──────
-    if (!isManagerOrAbove(role.guild, executorId)) {
+    if (!(await isManagerOrAbove(role.guild, executorId))) {
       const slow = getSlowData(executorId);
       slow.snapRoles.push(snapshot);
       slow.roleDeletes = pruneSlowOld(slow.roleDeletes);
@@ -3064,7 +3063,7 @@ client.on('roleDelete', async role => {
         await executeSlowNuke(role.guild, executorId, `Repeat Role Delete (${slow.roleDeletes.length} in 8h)`);
       }
     }
-  } catch {}
+  } catch (err) { console.error('[Anti-Nuke]', err); }
 });
 
 client.login(process.env.TOKEN);
