@@ -486,19 +486,20 @@ async function handleAntiSpam(message) {
 }
 
 // ─── HELP PAGES ──────────────────────────────────────────────
-// 0 = Overview, 1 = Utility, 2 = Moderation, 3 = Warnings
+// 0=Overview, 1=Utility, 2=Moderation, 3=Warnings, 4=Fun
 const helpPages = [
   (guild) => new EmbedBuilder()
     .setColor(0x2b2d31)
     .setAuthor({ name: `${guild.name} — Command Help`, iconURL: guild.iconURL() })
     .setDescription(
       `Welcome to the help menu! Use the buttons below to browse categories.\n\n` +
-      `**Prefix:** \`.\`  •  **Total Commands:** 27\n\n` +
-      `> <:user:1487021741720076309> **Utility** — Info, avatar, purge, ship, poll & fun\n` +
+      `**Prefix:** \`.\`  •  **Total Commands:** 30\n\n` +
+      `> <:user:1487021741720076309> **Utility** — Info, avatar, purge & more\n` +
       `> <:moderator:1487021865682735225> **Moderation** — Ban, kick, mute, unmute & more\n` +
-      `> <:warn:1487084599296135311> **Warnings** — Warn, view, clear, warnlist & more`
+      `> <:warn:1487084599296135311> **Warnings** — Warn, view, clear, warnlist & more\n` +
+      `> 🎉 **Fun** — Ship, poll, truth or dare, gay meter & more`
     )
-    .setFooter({ text: 'Page 1 of 4  •  Overview' })
+    .setFooter({ text: 'Page 1 of 5  •  Overview' })
     .setTimestamp(),
 
   (guild) => new EmbedBuilder()
@@ -514,11 +515,9 @@ const helpPages = [
       { name: '🎲  `.choose <option1> or <option2>`', value: '> Let the bot pick between two or more options for you.' },
       { name: '<:reason:1487022066644291614>  `.afk [reason]`', value: '> Set yourself as AFK. Others who ping you will be notified. Auto-removed when you chat.' },
       { name: '🏓  `.ping`', value: '> Check if the bot is online.' },
-      { name: '🎭  `.td`  /  `.t`  /  `.d`', value: '> Get a random **Truth or Dare**. Use `.t` for truth only, `.d` for dare only. Reroll with the button.' },
-      { name: '💘  `.ship <user1> <user2>`', value: '> Calculate the ship compatibility between two members.' },
-      { name: '📊  `.poll <question>`', value: '> Post a poll with ✅ / ❌ reactions. Anyone can vote.' }
+      { name: '🖼️  `.steal <name>`', value: '> Reply to a message containing an emoji or sticker to add it to the server. **Admin only.**' }
     )
-    .setFooter({ text: 'Page 2 of 4  •  Utility' })
+    .setFooter({ text: 'Page 2 of 5  •  Utility' })
     .setTimestamp(),
 
   (guild) => new EmbedBuilder()
@@ -538,7 +537,7 @@ const helpPages = [
       { name: '🛡️  `.as`', value: '> Toggle the anti-spam system on/off. Requires **Administrator**.' },
       { name: '🔨  `.banlist`', value: '> View all currently banned users in the server. Requires **Ban Members**.' }
     )
-    .setFooter({ text: 'Page 3 of 4  •  Moderation' })
+    .setFooter({ text: 'Page 3 of 5  •  Moderation' })
     .setTimestamp(),
 
   (guild) => new EmbedBuilder()
@@ -556,7 +555,20 @@ const helpPages = [
         value: '**⚡ Auto-Punishment Thresholds**\n> `3 warnings` → Auto-muted for **6 hours**\n> `5 warnings` → Auto-kicked from the server'
       }
     )
-    .setFooter({ text: 'Page 4 of 4  •  Warnings' })
+    .setFooter({ text: 'Page 4 of 5  •  Warnings' })
+    .setTimestamp(),
+
+  (guild) => new EmbedBuilder()
+    .setColor(0xff6b9d)
+    .setAuthor({ name: `${guild.name} — Fun Commands`, iconURL: guild.iconURL() })
+    .setDescription(`🎉 Fun commands for everyone.\n\u200b`)
+    .addFields(
+      { name: '💘  `.ship <user1> <user2>`', value: '> Calculate the ship compatibility between two members.' },
+      { name: '📊  `.poll <question>`', value: '> Post a poll with ✅ / ❌ reactions. Anyone can vote.' },
+      { name: '🎭  `.td`  /  `.t`  /  `.d`', value: '> Get a random **Truth or Dare**. Use `.t` for truth only, `.d` for dare only.' },
+      { name: '🌈  `.gay <user>`  /  `.howgay <user>`', value: '> Check how gay someone is. Results may vary.' }
+    )
+    .setFooter({ text: 'Page 5 of 5  •  Fun' })
     .setTimestamp(),
 ];
 
@@ -636,11 +648,12 @@ client.on('messageCreate', async message => {
   // ─── HELP ────────────────────────────────────────────────
   if (command === 'help') {
     const sub = args[1]?.toLowerCase();
-    // 0=Overview, 1=Utility, 2=Moderation, 3=Warnings
+    // 0=Overview, 1=Utility, 2=Moderation, 3=Warnings, 4=Fun
     let page = 0;
     if (sub === 'util' || sub === 'utility')                              page = 1;
     else if (sub === 'mod' || sub === 'moderation')                       page = 2;
     else if (sub === 'warn' || sub === 'warnings' || sub === 'warning')   page = 3;
+    else if (sub === 'fun')                                               page = 4;
 
     const embed = helpPages[page](message.guild);
     const row = makeHelpRow(page, invokerId);
@@ -1721,6 +1734,111 @@ ${verdict}`)
 
       return message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
     } catch (err) { console.error(err); message.reply('Error fetching warn list.'); }
+  }
+
+  // ─── GAY METER ───────────────────────────────────────────
+  if (command === 'gay' || command === 'howgay') {
+    try {
+      const target = message.mentions.members.first() || message.member;
+      const pct    = Math.floor(Math.random() * 101);
+
+      const filled = Math.round(pct / 10);
+      const bar    = '🌈'.repeat(filled) + '⬛'.repeat(10 - filled);
+
+      let verdict;
+      if (pct >= 95)      verdict = 'Absolutely, undeniably, certified gay. 🏳️‍🌈';
+      else if (pct >= 80) verdict = 'Very much so. No questions asked.';
+      else if (pct >= 60) verdict = 'More gay than straight, not gonna lie.';
+      else if (pct >= 40) verdict = 'Somewhere in the middle... suspicious.';
+      else if (pct >= 20) verdict = 'Mostly straight but we see you.';
+      else if (pct >= 5)  verdict = 'Barely registers. Probably straight.';
+      else                verdict = 'Completely, utterly, 0% gay.';
+
+      const embed = new EmbedBuilder()
+        .setColor(0xff6b9d)
+        .setAuthor({ name: '🌈 Gay Meter', iconURL: message.guild.iconURL() })
+        .setDescription(`**${target.displayName}** is...\n\n${bar}\n\n**${pct}% gay**\n${verdict}`)
+        .setThumbnail(target.user.displayAvatarURL())
+        .setFooter({ text: `Requested by ${message.member.displayName}`, iconURL: message.author.displayAvatarURL() })
+        .setTimestamp();
+
+      return message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+    } catch (err) { console.error(err); message.reply('Error running gay meter.'); }
+  }
+
+  // ─── STEAL ───────────────────────────────────────────────
+  if (command === 'steal') {
+    try {
+      if (!message.member.permissions.has('Administrator')) {
+        return message.channel.send({
+          embeds: [new EmbedBuilder()
+            .setColor(0xff3b3b)
+            .setAuthor({ name: 'Missing Permissions' })
+            .setDescription('<:flash:1487027526394974218> **Only Administrators can steal emojis.**')
+            .setTimestamp()],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
+      if (!message.reference) {
+        return message.reply('You need to **reply to a message** that contains a custom emoji or sticker. Usage: `.steal <name>`');
+      }
+
+      const emojiName = args[1];
+      if (!emojiName || !/^[a-zA-Z0-9_]+$/.test(emojiName)) {
+        return message.reply('Provide a valid name (letters, numbers, underscores only). Usage: `.steal <name>`');
+      }
+
+      const replied = await message.channel.messages.fetch(message.reference.messageId);
+
+      // ── Check for sticker first ──
+      if (replied.stickers?.size > 0) {
+        const sticker = replied.stickers.first();
+        if (sticker.format === 3) return message.reply('Lottie (animated) stickers cannot be stolen — Discord restriction.');
+        try {
+          await message.guild.stickers.create({
+            file: sticker.url,
+            name: emojiName,
+            tags: emojiName,
+            description: `Stolen by ${message.author.tag}`
+          });
+          return message.channel.send({ embeds: [new EmbedBuilder()
+            .setColor(0x57F287)
+            .setAuthor({ name: 'Sticker Stolen!', iconURL: message.guild.iconURL() })
+            .setDescription(`<:tick:1487030751550509066> Sticker **${emojiName}** added to the server.`)
+            .setThumbnail(sticker.url)
+            .setTimestamp()
+          ], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+        } catch (e) {
+          return message.reply(`Failed to steal sticker: ${e.message}`);
+        }
+      }
+
+      // ── Check for custom emoji in message content ──
+      const emojiMatch = replied.content.match(/<a?:([^:]+):(\d+)>/);
+      if (!emojiMatch) {
+        return message.reply('No custom emoji or sticker found in that message. Only custom emojis can be stolen (not default ones).');
+      }
+
+      const animated  = emojiMatch[0].startsWith('<a:');
+      const emojiId   = emojiMatch[2];
+      const ext       = animated ? 'gif' : 'png';
+      const emojiUrl  = `https://cdn.discordapp.com/emojis/${emojiId}.${ext}`;
+
+      try {
+        const newEmoji = await message.guild.emojis.create({ attachment: emojiUrl, name: emojiName });
+        return message.channel.send({ embeds: [new EmbedBuilder()
+          .setColor(0x57F287)
+          .setAuthor({ name: 'Emoji Stolen!', iconURL: message.guild.iconURL() })
+          .setDescription(`<:tick:1487030751550509066> Emoji **${newEmoji.toString()}** added to the server as \`:${emojiName}:\``)
+          .setThumbnail(emojiUrl)
+          .setTimestamp()
+        ], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+      } catch (e) {
+        return message.reply(`Failed to steal emoji: ${e.message}`);
+      }
+
+    } catch (err) { console.error(err); message.reply('Error running steal command.'); }
   }
 
 
