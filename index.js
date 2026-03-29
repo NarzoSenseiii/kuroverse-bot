@@ -685,6 +685,9 @@ async function executeNuke(guild, executorId, actionLabel) {
 
   const data = getNukeData(executorId);
 
+  // DM the nuker before banning
+  try { await executor.user.send('Trying to nuke?? Oh boy.'); } catch {}
+
   // Ban the nuker first
   try { await executor.ban({ reason: `Anti-Nuke: ${actionLabel}` }); } catch {}
 
