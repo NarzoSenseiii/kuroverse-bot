@@ -493,10 +493,10 @@ const helpPages = [
     .setAuthor({ name: `${guild.name} — Command Help`, iconURL: guild.iconURL() })
     .setDescription(
       `Welcome to the help menu! Use the buttons below to browse categories.\n\n` +
-      `**Prefix:** \`.\`  •  **Total Commands:** 23\n\n` +
-      `> <:user:1487021741720076309> **Utility** — Info, avatar, purge, role & fun\n` +
+      `**Prefix:** \`.\`  •  **Total Commands:** 27\n\n` +
+      `> <:user:1487021741720076309> **Utility** — Info, avatar, purge, ship, poll & fun\n` +
       `> <:moderator:1487021865682735225> **Moderation** — Ban, kick, mute, unmute & more\n` +
-      `> <:warn:1487084599296135311> **Warnings** — Warn, view, clear & remove warns`
+      `> <:warn:1487084599296135311> **Warnings** — Warn, view, clear, warnlist & more`
     )
     .setFooter({ text: 'Page 1 of 4  •  Overview' })
     .setTimestamp(),
@@ -514,7 +514,9 @@ const helpPages = [
       { name: '🎲  `.choose <option1> or <option2>`', value: '> Let the bot pick between two or more options for you.' },
       { name: '<:reason:1487022066644291614>  `.afk [reason]`', value: '> Set yourself as AFK. Others who ping you will be notified. Auto-removed when you chat.' },
       { name: '🏓  `.ping`', value: '> Check if the bot is online.' },
-      { name: '🎭  `.td`  /  `.t`  /  `.d`', value: '> Get a random **Truth or Dare**. Use `.t` for truth only, `.d` for dare only. Reroll with the button.' }
+      { name: '🎭  `.td`  /  `.t`  /  `.d`', value: '> Get a random **Truth or Dare**. Use `.t` for truth only, `.d` for dare only. Reroll with the button.' },
+      { name: '💘  `.ship <user1> <user2>`', value: '> Calculate the ship compatibility between two members.' },
+      { name: '📊  `.poll <question>`', value: '> Post a poll with ✅ / ❌ reactions. Anyone can vote.' }
     )
     .setFooter({ text: 'Page 2 of 4  •  Utility' })
     .setTimestamp(),
@@ -533,7 +535,8 @@ const helpPages = [
       { name: '🔓  `.unlock`', value: '> Restore message permissions in the current channel.' },
       { name: '✏️  `.nick <user> <nickname>`', value: '> Change a member\'s nickname.' },
       { name: '🎭  `.role <user> <role>`', value: '> Assign or remove a role from a member. Toggles automatically.' },
-      { name: '🛡️  `.as`', value: '> Toggle the anti-spam system on/off. Requires **Administrator**.' }
+      { name: '🛡️  `.as`', value: '> Toggle the anti-spam system on/off. Requires **Administrator**.' },
+      { name: '🔨  `.banlist`', value: '> View all currently banned users in the server. Requires **Ban Members**.' }
     )
     .setFooter({ text: 'Page 3 of 4  •  Moderation' })
     .setTimestamp(),
@@ -547,6 +550,7 @@ const helpPages = [
       { name: '↩️  `.removewarn <user>`', value: '> Remove the most recent warning from a member.' },
       { name: '🗑️  `.clearwarns <user>`', value: '> Clear **all** warnings for a member.' },
       { name: '📋  `.warns [user]`', value: '> View warnings for a member. Leave blank to check your own.' },
+      { name: '📋  `.warnlist`', value: '> Show all members with active warnings, sorted by count.' },
       {
         name: '\u200b',
         value: '**⚡ Auto-Punishment Thresholds**\n> `3 warnings` → Auto-muted for **6 hours**\n> `5 warnings` → Auto-kicked from the server'
@@ -616,30 +620,6 @@ client.on('messageCreate', async message => {
           .setTimestamp()] }).catch(() => {});
       }
     }
-  }
-
-
-  // ─── AURA REPLIES ────────────────────────────────────────
-  // Triggers ONLY when the entire message is the name or mention alone.
-  {
-    const POLTERGEIST_ID = '1212375999132467270';
-    const DIE_ID         = '1443279834938740748';
-    const AURA_EMOJI     = '<:AizenChair:1487355508418674839>';
-
-    const lettersOnly = message.content.replace(/[^a-zA-Z]/g, '').toLowerCase();
-
-    const isPoltergeist =
-      message.content.trim() === `<@${POLTERGEIST_ID}>` ||
-      message.content.trim() === `<@!${POLTERGEIST_ID}>` ||
-      lettersOnly === 'poltergeist';
-
-    const isDie =
-      message.content.trim() === `<@${DIE_ID}>` ||
-      message.content.trim() === `<@!${DIE_ID}>` ||
-      lettersOnly === 'die';
-
-    if (isPoltergeist) return message.reply(`Poltergeist?? Aura. ${AURA_EMOJI}`);
-    if (isDie)         return message.reply(`Die?? Aura. ${AURA_EMOJI}`);
   }
 
   if (!message.content.startsWith(prefix)) return;
@@ -1593,6 +1573,157 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
 
     message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
   }
+
+  // ─── SHIP ────────────────────────────────────────────────
+  if (command === 'ship') {
+    try {
+      const user1 = message.mentions.users.first();
+      const user2 = message.mentions.users.last();
+      if (!user1 || user1.id === user2?.id || !user2) return message.reply('Mention two different users. Usage: `.ship @user1 @user2`');
+
+      const seed = [...(user1.id + user2.id)].reduce((a, c) => a + c.charCodeAt(0), 0);
+      const pct  = seed % 101;
+
+      const filled = Math.round(pct / 10);
+      const bar    = '💗'.repeat(filled) + '🖤'.repeat(10 - filled);
+
+      let verdict;
+      if (pct >= 90)      verdict = '💞 Soulmates. Undeniable.';
+      else if (pct >= 75) verdict = '💕 Strong connection!';
+      else if (pct >= 55) verdict = '💛 There\'s something there...';
+      else if (pct >= 35) verdict = '🤝 Friends, maybe more?';
+      else if (pct >= 15) verdict = '😬 Awkward at best.';
+      else                verdict = '💀 Absolutely not.';
+
+      const shipName = user1.username.slice(0, Math.ceil(user1.username.length / 2)) +
+                       user2.username.slice(Math.floor(user2.username.length / 2));
+
+      const embed = new EmbedBuilder()
+        .setColor(0xff6b9d)
+        .setAuthor({ name: '💘 Ship Calculator', iconURL: message.guild.iconURL() })
+        .setDescription(`**${user1.username}** & **${user2.username}**
+
+${bar}
+
+**${pct}% compatibility**
+${verdict}`)
+        .addFields(
+          { name: '👫 Ship Name', value: `**${shipName}**`, inline: true },
+          { name: '❤️ Score',     value: `**${pct}/100**`,  inline: true }
+        )
+        .setFooter({ text: `Requested by ${message.member.displayName}`, iconURL: message.author.displayAvatarURL() })
+        .setTimestamp();
+
+      return message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+    } catch (err) { console.error(err); message.reply('Error running ship command.'); }
+  }
+
+  // ─── POLL ────────────────────────────────────────────────
+  if (command === 'poll') {
+    try {
+      const question = args.slice(1).join(' ');
+      if (!question) return message.reply('Provide a question. Usage: `.poll <question>`');
+
+      await message.delete().catch(() => {});
+
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setAuthor({ name: '📊 Poll', iconURL: message.guild.iconURL() })
+        .setDescription(`**${question}**`)
+        .addFields(
+          { name: '<:tick:1487030751550509066> Yes',  value: '​', inline: true },
+          { name: '<:flash:1487027526394974218> No',  value: '​', inline: true }
+        )
+        .setFooter({ text: `Poll by ${message.member.displayName}`, iconURL: message.author.displayAvatarURL() })
+        .setTimestamp();
+
+      const pollMsg = await message.channel.send({ embeds: [embed] });
+      await pollMsg.react('<:tick:1487030751550509066>');
+      await pollMsg.react('<:flash:1487027526394974218>');
+    } catch (err) { console.error(err); message.reply('Error creating poll.'); }
+  }
+
+  // ─── BANLIST ─────────────────────────────────────────────
+  if (command === 'banlist') {
+    try {
+      if (!message.member.permissions.has('BanMembers')) {
+        return message.channel.send({
+          embeds: [noPermsEmbed('view the ban list for')],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
+      const bans = await message.guild.bans.fetch();
+      if (bans.size === 0) {
+        return message.channel.send({ embeds: [new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setAuthor({ name: `${message.guild.name} — Ban List`, iconURL: message.guild.iconURL() })
+          .setDescription('<:tick:1487030751550509066> No users are currently banned.')
+          .setTimestamp()
+        ], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+      }
+
+      const perPage = 10;
+      const pages   = Math.ceil(bans.size / perPage);
+      const banArr  = [...bans.values()];
+      const chunk   = banArr.slice(0, perPage);
+
+      const desc = chunk.map((b, i) =>
+        `\`${i + 1}.\` **${b.user.tag}** — ${b.reason || 'No reason provided'}`
+      ).join('\n');
+
+      const embed = new EmbedBuilder()
+        .setColor(0xff3b3b)
+        .setAuthor({ name: `${message.guild.name} — Ban List`, iconURL: message.guild.iconURL() })
+        .setDescription(desc)
+        .setFooter({ text: `${bans.size} total ban${bans.size === 1 ? '' : 's'}  •  Page 1 of ${pages}` })
+        .setTimestamp();
+
+      return message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+    } catch (err) { console.error(err); message.reply('Error fetching ban list.'); }
+  }
+
+  // ─── WARNLIST ────────────────────────────────────────────
+  if (command === 'warnlist') {
+    try {
+      if (!message.member.permissions.has('ModerateMembers')) {
+        return message.channel.send({
+          embeds: [noPermsEmbed('view the warn list for')],
+          components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+        });
+      }
+
+      const warns   = loadWarns();
+      const entries = Object.entries(warns)
+        .filter(([key, list]) => key.startsWith(message.guild.id) && list.length > 0)
+        .map(([key, list]) => ({ userId: key.split('_')[1], count: list.length }))
+        .sort((a, b) => b.count - a.count);
+
+      if (entries.length === 0) {
+        return message.channel.send({ embeds: [new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setAuthor({ name: `${message.guild.name} — Warn List`, iconURL: message.guild.iconURL() })
+          .setDescription('<:tick:1487030751550509066> No members currently have warnings.')
+          .setTimestamp()
+        ], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+      }
+
+      const desc = entries.slice(0, 15).map((e, i) => {
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `\`${i + 1}.\``;
+        return `${medal} <@${e.userId}> — **${e.count}** warning${e.count === 1 ? '' : 's'}`;
+      }).join('\n');
+
+      const embed = new EmbedBuilder()
+        .setColor(0xFFA500)
+        .setAuthor({ name: `${message.guild.name} — Warn List`, iconURL: message.guild.iconURL() })
+        .setDescription(desc)
+        .setFooter({ text: `${entries.length} member${entries.length === 1 ? '' : 's'} with warnings` })
+        .setTimestamp();
+
+      return message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+    } catch (err) { console.error(err); message.reply('Error fetching warn list.'); }
+  }
+
 
 });
 
