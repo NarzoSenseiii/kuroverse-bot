@@ -82,10 +82,24 @@ function hierarchyEmbed(action) {
 
 async function resolveMember(guild, arg) {
   if (!arg) return null;
+
+  // Try mention or raw ID first
   const idMatch = arg.match(/^<?@?!?(\d{17,19})>?$/);
-  if (!idMatch) return null;
-  try { return await guild.members.fetch(idMatch[1]); }
-  catch { return null; }
+  if (idMatch) {
+    try { return await guild.members.fetch(idMatch[1]); } catch { return null; }
+  }
+
+  // Try username / display-name search (case-insensitive)
+  const query = arg.toLowerCase();
+  try {
+    // Fetch all members so cache is warm (works for reasonably-sized servers)
+    await guild.members.fetch();
+    return guild.members.cache.find(m =>
+      m.user.username.toLowerCase() === query ||
+      m.user.tag.toLowerCase() === query ||
+      (m.nickname && m.nickname.toLowerCase() === query)
+    ) || null;
+  } catch { return null; }
 }
 
 // ─── TRUTH & DARE DATA ───────────────────────────────────────
@@ -487,7 +501,12 @@ let raidLocked      = false;
 const nukeTracker = new Map();
 
 function getNukeData(userId) {
-  if (!nukeTracker.has(userId)) nukeTracker.set(userId, { bans: [], kicks: [], channelDeletes: [], roleDeletes: [] });
+  if (!nukeTracker.has(userId)) nukeTracker.set(userId, {
+    bans: [], kicks: [], channelDeletes: [], roleDeletes: [],
+    _bannedUsers: [],
+    _deletedChannels: [], // stores channel snapshot objects for revert
+    _deletedRoles: []     // stores role snapshot objects for revert
+  });
   return nukeTracker.get(userId);
 }
 
@@ -512,14 +531,66 @@ async function executeNuke(guild, executorId, actionLabel) {
   const executor = await guild.members.fetch(executorId).catch(() => null);
   if (!executor) return;
 
-  // Ban first
+  const data = getNukeData(executorId);
+
+  // Ban the nuker first
   try { await executor.ban({ reason: `Anti-Nuke: ${actionLabel}` }); } catch {}
 
+  // If the nuker is a bot, also ban whoever added it
+  let adderInfo = null;
+  if (executor.user.bot) {
+    const adderId = botAdderMap.get(executorId);
+    if (adderId) {
+      const adder = await guild.members.fetch(adderId).catch(() => null);
+      if (adder && !isImmune(guild, adderId)) {
+        try { await adder.ban({ reason: `Anti-Nuke: Added bot that nuked (${actionLabel})` }); } catch {}
+        adderInfo = adder;
+      }
+      botAdderMap.delete(executorId);
+    }
+  }
+
   // Revert: unban all recently banned members
-  const data = getNukeData(executorId);
   for (const userId of data._bannedUsers || []) {
     try { await guild.members.unban(userId, 'Anti-Nuke revert'); } catch {}
   }
+
+  // Revert: recreate deleted channels
+  for (const snap of data._deletedChannels || []) {
+    try {
+      await guild.channels.create({
+        name: snap.name,
+        type: snap.type,
+        topic: snap.topic,
+        nsfw: snap.nsfw,
+        bitrate: snap.bitrate,
+        userLimit: snap.userLimit,
+        rateLimitPerUser: snap.rateLimitPerUser,
+        parent: snap.parentId,
+        permissionOverwrites: snap.permissionOverwrites,
+        reason: 'Anti-Nuke revert'
+      });
+    } catch {}
+  }
+
+  // Revert: recreate deleted roles
+  for (const snap of data._deletedRoles || []) {
+    try {
+      await guild.roles.create({
+        name: snap.name,
+        color: snap.color,
+        hoist: snap.hoist,
+        mentionable: snap.mentionable,
+        permissions: BigInt(snap.permissions),
+        reason: 'Anti-Nuke revert'
+      });
+    } catch {}
+  }
+
+  // Build response description
+  const responseText = adderInfo
+    ? `Bot banned + Adder (<@${adderInfo.id}>) banned + Actions Reverted`
+    : 'Banned + Actions Reverted';
 
   // Alert log channel
   sendLog(guild, new EmbedBuilder()
@@ -529,23 +600,28 @@ async function executeNuke(guild, executorId, actionLabel) {
     .addFields(
       { name: '<:user:1487021741720076309> Perpetrator', value: `<@${executorId}> (${executor.user.tag})`, inline: true },
       { name: '<:reason:1487022066644291614> Action', value: actionLabel, inline: true },
-      { name: '<:moderator:1487021865682735225> Response', value: 'Banned + Reverted', inline: true }
+      { name: '<:moderator:1487021865682735225> Response', value: responseText, inline: true }
     ).setTimestamp());
 
   // DM owner
   try {
     const owner = await client.users.fetch(NUKE_OWNER_ID);
+    const embedFields = [
+      { name: '<:user:1487021741720076309> Perpetrator', value: `<@${executorId}>\n**Tag:** ${executor.user.tag}\n**ID:** ${executorId}` },
+      { name: '<:flash:1487027526394974218> Trigger', value: actionLabel, inline: true },
+      { name: '<:moderator:1487021865682735225> Action Taken', value: responseText, inline: true },
+      { name: '🔗 Server', value: `${guild.name} (${guild.id})` }
+    ];
+    if (adderInfo) {
+      embedFields.push({ name: '➕ Bot Adder (also banned)', value: `<@${adderInfo.id}>\n**Tag:** ${adderInfo.user.tag}\n**ID:** ${adderInfo.id}` });
+    }
     owner.send({ embeds: [new EmbedBuilder()
       .setColor(0xff0000)
       .setAuthor({ name: '🚨 ANTI-NUKE TRIGGERED', iconURL: guild.iconURL() })
       .setThumbnail(executor.user.displayAvatarURL())
       .setDescription(`A nuke attempt was detected and neutralized in **${guild.name}**.`)
-      .addFields(
-        { name: '<:user:1487021741720076309> Perpetrator', value: `<@${executorId}>\n**Tag:** ${executor.user.tag}\n**ID:** ${executorId}` },
-        { name: '<:flash:1487027526394974218> Trigger', value: actionLabel, inline: true },
-        { name: '<:moderator:1487021865682735225> Action Taken', value: 'Banned + Actions Reverted', inline: true },
-        { name: '🔗 Server', value: `${guild.name} (${guild.id})` }
-      ).setTimestamp()] });
+      .addFields(...embedFields)
+      .setTimestamp()] });
   } catch {}
 
   nukeTracker.delete(executorId);
@@ -2555,8 +2631,41 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
   }
 });
 
-// ─── GUILD MEMBER ADD (ANTI-RAID) ────────────────────────────
+// ─── GUILD MEMBER ADD (ANTI-RAID + BOT DETECTION) ────────────
+// Maps botId -> adderId so we can ban the adder if the bot nukes
+const botAdderMap = new Map();
+
 client.on('guildMemberAdd', async member => {
+  // ── Bot-add detection ────────────────────────────────────────
+  if (member.user.bot) {
+    try {
+      const logs = await member.guild.fetchAuditLogs({ type: 28 /* BOT_ADD */, limit: 1 });
+      const entry = logs.entries.first();
+      const adderId = entry?.executor?.id;
+
+      if (adderId && adderId !== client.user.id) {
+        // Remember who added this bot
+        botAdderMap.set(member.id, adderId);
+
+        // DM Poltergeist immediately
+        try {
+          const owner = await client.users.fetch(NUKE_OWNER_ID);
+          await owner.send({ embeds: [new EmbedBuilder()
+            .setColor(0xffa500)
+            .setAuthor({ name: '⚠️ New Bot Added', iconURL: member.guild.iconURL() })
+            .setThumbnail(member.user.displayAvatarURL())
+            .setDescription(`A new bot was just added to **${member.guild.name}**.`)
+            .addFields(
+              { name: '🤖 Bot', value: `<@${member.id}>\n**Tag:** ${member.user.tag}\n**ID:** ${member.id}`, inline: true },
+              { name: '<:user:1487021741720076309> Added By', value: `<@${adderId}>\n**ID:** ${adderId}`, inline: true },
+              { name: '🔗 Server', value: `${member.guild.name} (${member.guild.id})` }
+            ).setTimestamp()] });
+        } catch {}
+      }
+    } catch {}
+    return; // don't run raid check for bots
+  }
+
   handleRaidJoin(member);
 });
 
@@ -2645,6 +2754,24 @@ client.on('channelDelete', async channel => {
     if (isImmune(channel.guild, executorId)) return;
 
     const data = getNukeData(executorId);
+
+    // Snapshot the channel so we can recreate it on nuke trigger
+    const snapshot = {
+      name: channel.name,
+      type: channel.type,
+      topic: channel.topic || undefined,
+      nsfw: channel.nsfw || false,
+      bitrate: channel.bitrate || undefined,
+      userLimit: channel.userLimit || undefined,
+      rateLimitPerUser: channel.rateLimitPerUser || undefined,
+      parentId: channel.parentId || undefined,
+      position: channel.rawPosition,
+      permissionOverwrites: channel.permissionOverwrites?.cache.map(o => ({
+        id: o.id, type: o.type, allow: o.allow.bitfield.toString(), deny: o.deny.bitfield.toString()
+      })) || []
+    };
+    data._deletedChannels.push(snapshot);
+
     data.channelDeletes.push(Date.now());
     data.channelDeletes = pruneOld(data.channelDeletes);
 
@@ -2663,6 +2790,18 @@ client.on('roleDelete', async role => {
     if (isImmune(role.guild, executorId)) return;
 
     const data = getNukeData(executorId);
+
+    // Snapshot the role so we can recreate it on nuke trigger
+    const snapshot = {
+      name: role.name,
+      color: role.color,
+      hoist: role.hoist,
+      mentionable: role.mentionable,
+      permissions: role.permissions.bitfield.toString(),
+      position: role.rawPosition
+    };
+    data._deletedRoles.push(snapshot);
+
     data.roleDeletes.push(Date.now());
     data.roleDeletes = pruneOld(data.roleDeletes);
 
