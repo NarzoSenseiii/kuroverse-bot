@@ -16,7 +16,8 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessageReactions
   ]
 });
 
@@ -387,6 +388,11 @@ function makeTDRow(invokerId) {
 }
 
 const LOG_CHANNEL_ID = '1484500454225477743';
+
+// ─── HALL OF FAME (STARBOARD) ────────────────────────────────
+const HALL_OF_FAME_CHANNEL_ID = '1487800915066097814'; // Replace with your actual hall-of-fame channel ID
+const STAR_THRESHOLD = 3;
+const starredMessages = new Set(); // track message IDs already posted
 
 async function sendLog(guild, embed) {
   try {
@@ -3067,6 +3073,60 @@ client.on('roleDelete', async role => {
       }
     }
   } catch (err) { console.error('[Anti-Nuke]', err); }
+});
+
+// ─── HALL OF FAME LISTENER ───────────────────────────────────
+client.on('messageReactionAdd', async (reaction, user) => {
+  try {
+    // Fetch partial reaction/message if needed
+    if (reaction.partial) await reaction.fetch();
+    if (reaction.message.partial) await reaction.message.fetch();
+
+    // Only care about ⭐
+    if (reaction.emoji.name !== '⭐') return;
+
+    const message = reaction.message;
+    const guild = message.guild;
+    if (!guild) return;
+
+    // Check star count
+    const starReaction = message.reactions.cache.get('⭐');
+    const starCount = starReaction ? starReaction.count : 0;
+    if (starCount < STAR_THRESHOLD) return;
+
+    // Don't post the same message twice
+    if (starredMessages.has(message.id)) return;
+    starredMessages.add(message.id);
+
+    // Find the hall of fame channel
+    const hofChannel = guild.channels.cache.get(HALL_OF_FAME_CHANNEL_ID);
+    if (!hofChannel) return;
+
+    // Build the embed
+    const author = message.member || message.author;
+    const displayName = message.member?.displayName || message.author.username;
+    const avatarURL = message.author.displayAvatarURL();
+
+    const embed = new EmbedBuilder()
+      .setColor(0xFFD700)
+      .setAuthor({ name: displayName, iconURL: avatarURL })
+      .setDescription(message.content || null)
+      .addFields(
+        { name: '​', value: `[Jump to message](https://discord.com/channels/${guild.id}/${message.channel.id}/${message.id})`, inline: true },
+        { name: '⭐ Stars', value: `${starCount}`, inline: true },
+        { name: '📍 Channel', value: `<#${message.channel.id}>`, inline: true }
+      )
+      .setTimestamp(message.createdAt);
+
+    // Attach image if the message has one
+    const imageAttachment = message.attachments.find(a => a.contentType?.startsWith('image/'));
+    if (imageAttachment) embed.setImage(imageAttachment.url);
+
+    await hofChannel.send({ content: `⭐ **${starCount}** stars!`, embeds: [embed] });
+
+  } catch (err) {
+    console.error('Starboard error:', err);
+  }
 });
 
 client.login(process.env.TOKEN);
