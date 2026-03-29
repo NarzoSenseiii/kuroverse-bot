@@ -3078,18 +3078,15 @@ client.on('roleDelete', async role => {
 // ─── HALL OF FAME LISTENER ───────────────────────────────────
 client.on('messageReactionAdd', async (reaction, user) => {
   try {
-    // Fetch partial reaction/message if needed
     if (reaction.partial) await reaction.fetch();
     if (reaction.message.partial) await reaction.message.fetch();
 
-    // Only care about ⭐
     if (reaction.emoji.name !== '⭐') return;
 
     const message = reaction.message;
     const guild = message.guild;
     if (!guild) return;
 
-    // Check star count
     const starReaction = message.reactions.cache.get('⭐');
     const starCount = starReaction ? starReaction.count : 0;
     if (starCount < STAR_THRESHOLD) return;
@@ -3098,31 +3095,38 @@ client.on('messageReactionAdd', async (reaction, user) => {
     if (starredMessages.has(message.id)) return;
     starredMessages.add(message.id);
 
-    // Find the hall of fame channel
     const hofChannel = guild.channels.cache.get(HALL_OF_FAME_CHANNEL_ID);
     if (!hofChannel) return;
 
-    // Build the embed
-    const author = message.member || message.author;
     const displayName = message.member?.displayName || message.author.username;
     const avatarURL = message.author.displayAvatarURL();
+    const jumpURL = `https://discord.com/channels/${guild.id}/${message.channel.id}/${message.id}`;
 
-    const embed = new EmbedBuilder()
+    // ── Hall of Fame embed ──
+    const hofEmbed = new EmbedBuilder()
       .setColor(0xFFD700)
-      .setAuthor({ name: displayName, iconURL: avatarURL })
-      .setDescription(message.content || null)
+      .setAuthor({ name: `${displayName}`, iconURL: avatarURL })
+      .setDescription(message.content ? `"${message.content}"` : '*No text content*')
       .addFields(
-        { name: '​', value: `[Jump to message](https://discord.com/channels/${guild.id}/${message.channel.id}/${message.id})`, inline: true },
-        { name: '⭐ Stars', value: `${starCount}`, inline: true },
-        { name: '📍 Channel', value: `<#${message.channel.id}>`, inline: true }
+        { name: '⭐ Stars', value: `**${starCount}**`, inline: true },
+        { name: '📍 Posted in', value: `<#${message.channel.id}>`, inline: true },
+        { name: '🔗 Jump', value: `[Click to view](${jumpURL})`, inline: true }
       )
+      .setFooter({ text: `Hall of Fame • ${guild.name}`, iconURL: guild.iconURL() })
       .setTimestamp(message.createdAt);
 
-    // Attach image if the message has one
     const imageAttachment = message.attachments.find(a => a.contentType?.startsWith('image/'));
-    if (imageAttachment) embed.setImage(imageAttachment.url);
+    if (imageAttachment) hofEmbed.setImage(imageAttachment.url);
 
-    await hofChannel.send({ content: `⭐ **${starCount}** stars!`, embeds: [embed] });
+    await hofChannel.send({ content: `⭐ **A message just entered the Hall of Fame!**`, embeds: [hofEmbed] });
+
+    // ── In-channel notification ──
+    const notifEmbed = new EmbedBuilder()
+      .setColor(0xFFD700)
+      .setDescription(`⭐ **This message has entered the [Hall of Fame](${jumpURL.replace(`/${message.id}`, '')})!**\nIt reached **${starCount} stars** and has been saved in <#${HALL_OF_FAME_CHANNEL_ID}>.`)
+      .setTimestamp();
+
+    await message.channel.send({ embeds: [notifEmbed], reply: { messageReference: message.id, failIfNotExists: false } });
 
   } catch (err) {
     console.error('Starboard error:', err);
