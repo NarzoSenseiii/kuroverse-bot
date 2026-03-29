@@ -608,6 +608,7 @@ client.on('messageCreate', async message => {
   }
 
   // AFK: notify if someone pings an AFK user
+  // Also log interactions for ship accuracy
   if (message.mentions.users.size > 0) {
     for (const [userId, data] of afkMap) {
       if (message.mentions.users.has(userId)) {
@@ -620,6 +621,24 @@ client.on('messageCreate', async message => {
           .setTimestamp()] }).catch(() => {});
       }
     }
+    // Log +1 interaction between sender and each mentioned user
+    if (message.guild) {
+      for (const mentionedUser of message.mentions.users.values()) {
+        if (!mentionedUser.bot) {
+          logInteraction(message.guild.id, message.author.id, mentionedUser.id);
+        }
+      }
+    }
+  }
+
+  // Log +1 interaction if this is a reply to another user's message
+  if (message.reference && message.guild) {
+    try {
+      const replied = await message.channel.messages.fetch(message.reference.messageId);
+      if (replied && replied.author.id !== message.author.id && !replied.author.bot) {
+        logInteraction(message.guild.id, message.author.id, replied.author.id);
+      }
+    } catch {}
   }
 
   if (!message.content.startsWith(prefix)) return;
@@ -1581,8 +1600,20 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       const user2 = message.mentions.users.last();
       if (!user1 || user1.id === user2?.id || !user2) return message.reply('Mention two different users. Usage: `.ship @user1 @user2`');
 
-      const seed = [...(user1.id + user2.id)].reduce((a, c) => a + c.charCodeAt(0), 0);
-      const pct  = seed % 101;
+      // Get real interaction count between these two users
+      const interactions = getInteractions(message.guild.id, user1.id, user2.id);
+
+      // Convert interaction count to a base score
+      // 0 = 5–25%, 1–4 = 20–40%, 5–19 = 35–60%, 20–49 = 55–80%, 50–99 = 70–90%, 100+ = 85–100%
+      let baseMin, baseMax;
+      if      (interactions === 0)    { baseMin = 5;  baseMax = 25; }
+      else if (interactions < 5)      { baseMin = 20; baseMax = 40; }
+      else if (interactions < 20)     { baseMin = 35; baseMax = 60; }
+      else if (interactions < 50)     { baseMin = 55; baseMax = 80; }
+      else if (interactions < 100)    { baseMin = 70; baseMax = 90; }
+      else                            { baseMin = 85; baseMax = 100; }
+
+      const pct = Math.floor(Math.random() * (baseMax - baseMin + 1)) + baseMin;
 
       const filled = Math.round(pct / 10);
       const bar    = '💗'.repeat(filled) + '🖤'.repeat(10 - filled);
@@ -1598,6 +1629,15 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       const shipName = user1.username.slice(0, Math.ceil(user1.username.length / 2)) +
                        user2.username.slice(Math.floor(user2.username.length / 2));
 
+      // Interaction label for display
+      let interactionLabel;
+      if      (interactions === 0)  interactionLabel = 'No data yet';
+      else if (interactions < 5)    interactionLabel = 'Barely know each other';
+      else if (interactions < 20)   interactionLabel = 'Occasionally interact';
+      else if (interactions < 50)   interactionLabel = 'Interact regularly';
+      else if (interactions < 100)  interactionLabel = 'Talk a lot';
+      else                          interactionLabel = 'Basically inseparable';
+
       const embed = new EmbedBuilder()
         .setColor(0xff6b9d)
         .setAuthor({ name: '💘 Ship Calculator', iconURL: message.guild.iconURL() })
@@ -1608,8 +1648,10 @@ ${bar}
 **${pct}% compatibility**
 ${verdict}`)
         .addFields(
-          { name: '👫 Ship Name', value: `**${shipName}**`, inline: true },
-          { name: '❤️ Score',     value: `**${pct}/100**`,  inline: true }
+          { name: '👫 Ship Name',       value: `**${shipName}**`,                    inline: true },
+          { name: '❤️ Score',           value: `**${pct}/100**`,                     inline: true },
+          { name: '💬 Interaction Data', value: `**${interactions}** interactions
+*${interactionLabel}*`, inline: false }
         )
         .setFooter({ text: `Requested by ${message.member.displayName}`, iconURL: message.author.displayAvatarURL() })
         .setTimestamp();
