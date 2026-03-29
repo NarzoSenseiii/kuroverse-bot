@@ -474,6 +474,125 @@ async function handleAntiSpam(message) {
   }
 }
 
+// ─── ANTI-NUKE & ANTI-RAID ───────────────────────────────────
+const FULL_ACCESS_ROLE_ID = '1484500399334490282';
+const IMMUNE_ROLE_ID      = '1484500404652867615'; // Admin — roles at or above this are immune
+const NUKE_OWNER_ID       = '1212375999132467270';
+
+let antiNukeEnabled = true;
+let antiRaidEnabled = true;
+let raidLocked      = false;
+
+// Track actions per user: { bans: [], kicks: [], channelDeletes: [], roleDeletes: [] }
+const nukeTracker = new Map();
+
+function getNukeData(userId) {
+  if (!nukeTracker.has(userId)) nukeTracker.set(userId, { bans: [], kicks: [], channelDeletes: [], roleDeletes: [] });
+  return nukeTracker.get(userId);
+}
+
+function pruneOld(arr, windowMs = 10000) {
+  const now = Date.now();
+  return arr.filter(t => now - t < windowMs);
+}
+
+function isImmune(guild, userId) {
+  const member = guild.members.cache.get(userId);
+  if (!member) return false;
+  const immuneRole = guild.roles.cache.get(IMMUNE_ROLE_ID);
+  if (!immuneRole) return false;
+  // immune if their highest role position is >= the immune role position
+  return member.roles.highest.position >= immuneRole.position;
+}
+
+async function executeNuke(guild, executorId, actionLabel) {
+  if (!antiNukeEnabled) return;
+  if (isImmune(guild, executorId)) return;
+
+  const executor = await guild.members.fetch(executorId).catch(() => null);
+  if (!executor) return;
+
+  // Ban first
+  try { await executor.ban({ reason: `Anti-Nuke: ${actionLabel}` }); } catch {}
+
+  // Revert: unban all recently banned members
+  const data = getNukeData(executorId);
+  for (const userId of data._bannedUsers || []) {
+    try { await guild.members.unban(userId, 'Anti-Nuke revert'); } catch {}
+  }
+
+  // Alert log channel
+  sendLog(guild, new EmbedBuilder()
+    .setColor(0xff0000)
+    .setAuthor({ name: '🛡️ Anti-Nuke Triggered', iconURL: guild.iconURL() })
+    .setThumbnail(executor.user.displayAvatarURL())
+    .addFields(
+      { name: '<:user:1487021741720076309> Perpetrator', value: `<@${executorId}> (${executor.user.tag})`, inline: true },
+      { name: '<:reason:1487022066644291614> Action', value: actionLabel, inline: true },
+      { name: '<:moderator:1487021865682735225> Response', value: 'Banned + Reverted', inline: true }
+    ).setTimestamp());
+
+  // DM owner
+  try {
+    const owner = await client.users.fetch(NUKE_OWNER_ID);
+    owner.send({ embeds: [new EmbedBuilder()
+      .setColor(0xff0000)
+      .setAuthor({ name: '🚨 ANTI-NUKE TRIGGERED', iconURL: guild.iconURL() })
+      .setThumbnail(executor.user.displayAvatarURL())
+      .setDescription(`A nuke attempt was detected and neutralized in **${guild.name}**.`)
+      .addFields(
+        { name: '<:user:1487021741720076309> Perpetrator', value: `<@${executorId}>\n**Tag:** ${executor.user.tag}\n**ID:** ${executorId}` },
+        { name: '<:flash:1487027526394974218> Trigger', value: actionLabel, inline: true },
+        { name: '<:moderator:1487021865682735225> Action Taken', value: 'Banned + Actions Reverted', inline: true },
+        { name: '🔗 Server', value: `${guild.name} (${guild.id})` }
+      ).setTimestamp()] });
+  } catch {}
+
+  nukeTracker.delete(executorId);
+}
+
+// Raid tracking
+const raidJoinTimes = [];
+
+async function handleRaidJoin(member) {
+  if (!antiRaidEnabled) return;
+  const now = Date.now();
+  raidJoinTimes.push(now);
+  // prune older than 10s
+  const recent = raidJoinTimes.filter(t => now - t < 10000);
+  raidJoinTimes.length = 0;
+  raidJoinTimes.push(...recent);
+
+  if (recent.length >= 5 && !raidLocked) {
+    raidLocked = true;
+    const guild = member.guild;
+
+    // Lock all text channels
+    const textChannels = guild.channels.cache.filter(c => c.type === 0);
+    for (const [, ch] of textChannels) {
+      try {
+        await ch.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false });
+      } catch {}
+    }
+
+    sendLog(guild, new EmbedBuilder()
+      .setColor(0xff0000)
+      .setAuthor({ name: '🚨 Anti-Raid: Lockdown Active', iconURL: guild.iconURL() })
+      .setDescription(`**${recent.length} members** joined in under 10 seconds.\n\nAll channels have been locked. Use \`.endraid\` to unlock.`)
+      .addFields({ name: 'Status', value: '🔴 Locked Down', inline: true })
+      .setTimestamp());
+
+    try {
+      const owner = await client.users.fetch(NUKE_OWNER_ID);
+      owner.send({ embeds: [new EmbedBuilder()
+        .setColor(0xff0000)
+        .setAuthor({ name: '🚨 RAID DETECTED — SERVER LOCKED', iconURL: guild.iconURL() })
+        .setDescription(`A raid was detected in **${guild.name}**.\n\n**${recent.length} joins** in under 10 seconds.\n\nAll channels are now locked. Use \`.endraid\` in the server to unlock.`)
+        .setTimestamp()] });
+    } catch {}
+  }
+}
+
 // ─── HELP PAGES ──────────────────────────────────────────────
 // 0=Overview, 1=Utility, 2=Moderation, 3=Warnings, 4=Fun
 const helpPages = [
@@ -486,7 +605,8 @@ const helpPages = [
       `> <:user:1487021741720076309> **Utility** — Info, avatar, purge & more\n` +
       `> <:moderator:1487021865682735225> **Moderation** — Ban, kick, mute, unmute & more\n` +
       `> <:warn:1487084599296135311> **Warnings** — Warn, view, clear, warnlist & more\n` +
-      `> 🎉 **Fun** — Ship, poll, truth or dare, marry & more`
+      `> 🎉 **Fun** — Ship, poll, truth or dare, marry & more\n\n` +
+      `> 🔒 **Admin only:** \`.help raid\` · \`.help nuke\``
     )
     .setFooter({ text: 'Page 1 of 5  •  Overview' })
     .setTimestamp(),
@@ -524,7 +644,10 @@ const helpPages = [
       { name: '✏️  `.nick <user> <nickname>`', value: '> Change a member\'s nickname.' },
       { name: '🎭  `.role <user> <role>`', value: '> Assign or remove a role from a member. Toggles automatically.' },
       { name: '🛡️  `.as`', value: '> Toggle the anti-spam system on/off. **On by default.** Requires **Administrator**.' },
-      { name: '🔨  `.banlist`', value: '> View all currently banned users in the server. Requires **Ban Members**.' }
+      { name: '🔨  `.banlist`', value: '> View all currently banned users in the server. Requires **Ban Members**.' },
+      { name: '🔒  `.antinuke`', value: '> Toggle Anti-Nuke on/off. **Full Access only.** Use `.help nuke` for details.' },
+      { name: '🚨  `.antiraid`', value: '> Toggle Anti-Raid on/off. **Full Access only.** Use `.help raid` for details.' },
+      { name: '✅  `.endraid`', value: '> End an active raid lockdown and restore all channels. **Admin only.**' }
     )
     .setFooter({ text: 'Page 3 of 5  •  Moderation' })
     .setTimestamp(),
@@ -1885,6 +2008,156 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
     } catch (err) { console.error(err); message.reply('Error running gay meter.'); }
   }
 
+  // ─── ANTINUKE TOGGLE ─────────────────────────────────────
+  if (command === 'antinuke') {
+    if (!message.member.roles.cache.has(FULL_ACCESS_ROLE_ID)) {
+      return message.channel.send({
+        embeds: [new EmbedBuilder()
+          .setColor(0xff3b3b)
+          .setAuthor({ name: 'Missing Permissions' })
+          .setDescription('<:flash:1487027526394974218> **Only members with Full Access can toggle Anti-Nuke.**')
+          .setTimestamp()],
+        components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+      });
+    }
+
+    antiNukeEnabled = !antiNukeEnabled;
+
+    const embed = new EmbedBuilder()
+      .setColor(antiNukeEnabled ? 0x57F287 : 0xff3b3b)
+      .setAuthor({ name: `🛡️ Anti-Nuke ${antiNukeEnabled ? 'Enabled' : 'Disabled'}`, iconURL: message.guild.iconURL() })
+      .setDescription(`<:moderator:1487021865682735225> **${message.member.displayName}** has turned Anti-Nuke **${antiNukeEnabled ? 'on' : 'off'}**.`)
+      .addFields({ name: 'Status', value: antiNukeEnabled ? '🟢 Active' : '🔴 Disabled', inline: true })
+      .setTimestamp();
+
+    message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+
+    sendLog(message.guild, new EmbedBuilder()
+      .setColor(antiNukeEnabled ? 0x57F287 : 0xff3b3b)
+      .setTitle(`🛡️ Anti-Nuke ${antiNukeEnabled ? 'Enabled' : 'Disabled'}`)
+      .addFields({ name: 'Toggled by', value: `<@${invokerId}>`, inline: true })
+      .setTimestamp());
+  }
+
+  // ─── ANTIRAID TOGGLE ─────────────────────────────────────
+  if (command === 'antiraid') {
+    if (!message.member.roles.cache.has(FULL_ACCESS_ROLE_ID)) {
+      return message.channel.send({
+        embeds: [new EmbedBuilder()
+          .setColor(0xff3b3b)
+          .setAuthor({ name: 'Missing Permissions' })
+          .setDescription('<:flash:1487027526394974218> **Only members with Full Access can toggle Anti-Raid.**')
+          .setTimestamp()],
+        components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+      });
+    }
+
+    antiRaidEnabled = !antiRaidEnabled;
+
+    const embed = new EmbedBuilder()
+      .setColor(antiRaidEnabled ? 0x57F287 : 0xff3b3b)
+      .setAuthor({ name: `🚨 Anti-Raid ${antiRaidEnabled ? 'Enabled' : 'Disabled'}`, iconURL: message.guild.iconURL() })
+      .setDescription(`<:moderator:1487021865682735225> **${message.member.displayName}** has turned Anti-Raid **${antiRaidEnabled ? 'on' : 'off'}**.`)
+      .addFields({ name: 'Status', value: antiRaidEnabled ? '🟢 Active' : '🔴 Disabled', inline: true })
+      .setTimestamp();
+
+    message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+
+    sendLog(message.guild, new EmbedBuilder()
+      .setColor(antiRaidEnabled ? 0x57F287 : 0xff3b3b)
+      .setTitle(`🚨 Anti-Raid ${antiRaidEnabled ? 'Enabled' : 'Disabled'}`)
+      .addFields({ name: 'Toggled by', value: `<@${invokerId}>`, inline: true })
+      .setTimestamp());
+  }
+
+  // ─── ENDRAID ─────────────────────────────────────────────
+  if (command === 'endraid') {
+    if (!message.member.permissions.has('Administrator')) {
+      return message.channel.send({
+        embeds: [noPermsEmbed('end the raid lockdown for')],
+        components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+      });
+    }
+
+    if (!raidLocked) {
+      return message.channel.send({
+        embeds: [new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setDescription('<:tick:1487030751550509066> There is no active raid lockdown.')
+          .setTimestamp()],
+        components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+      });
+    }
+
+    raidLocked = false;
+    raidJoinTimes.length = 0;
+
+    const textChannels = message.guild.channels.cache.filter(c => c.type === 0);
+    for (const [, ch] of textChannels) {
+      try { await ch.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: null }); } catch {}
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor(0x57F287)
+      .setAuthor({ name: '✅ Raid Lockdown Ended', iconURL: message.guild.iconURL() })
+      .setDescription('All channels have been unlocked. The server is back to normal.')
+      .addFields({ name: '<:moderator:1487021865682735225> Ended by', value: `<@${invokerId}>`, inline: true })
+      .setTimestamp();
+
+    message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+
+    sendLog(message.guild, new EmbedBuilder()
+      .setColor(0x57F287).setTitle('✅ Raid Lockdown Ended')
+      .addFields({ name: 'Ended by', value: `<@${invokerId}>`, inline: true })
+      .setTimestamp());
+  }
+
+  // ─── HELP (RAID / NUKE) ──────────────────────────────────
+  if (command === 'help' && (args[1] === 'raid' || args[1] === 'nuke')) {
+    if (!message.member.permissions.has('Administrator')) {
+      return message.channel.send({
+        embeds: [new EmbedBuilder()
+          .setColor(0xff3b3b)
+          .setAuthor({ name: 'Missing Permissions' })
+          .setDescription('<:flash:1487027526394974218> **Only Administrators can view this help section.**')
+          .setTimestamp()],
+        components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
+      });
+    }
+
+    const isRaid = args[1] === 'raid';
+
+    const embed = isRaid
+      ? new EmbedBuilder()
+          .setColor(0xff0000)
+          .setAuthor({ name: `${message.guild.name} — Anti-Raid`, iconURL: message.guild.iconURL() })
+          .setDescription('🚨 Anti-Raid system protects the server from mass join attacks.\n\u200b')
+          .addFields(
+            { name: '⚙️ Trigger', value: '**5 joins within 10 seconds** activates lockdown.' },
+            { name: '🔒 Response', value: 'All text channels are locked for **@everyone** automatically.' },
+            { name: '🔓  `.endraid`', value: '> Manually end the lockdown and restore all channels. **Admin only.**' },
+            { name: '🚨  `.antiraid`', value: '> Toggle Anti-Raid on/off. **Full Access only.** On by default.' },
+            { name: '📊 Current Status', value: `Anti-Raid: **${antiRaidEnabled ? '🟢 Enabled' : '🔴 Disabled'}**\nLockdown: **${raidLocked ? '🔴 Active' : '🟢 None'}**` }
+          )
+          .setFooter({ text: 'This section is only visible to Administrators.' })
+          .setTimestamp()
+      : new EmbedBuilder()
+          .setColor(0xff0000)
+          .setAuthor({ name: `${message.guild.name} — Anti-Nuke`, iconURL: message.guild.iconURL() })
+          .setDescription('🛡️ Anti-Nuke protects the server from internal threats (rogue mods/admins).\n\u200b')
+          .addFields(
+            { name: '⚙️ Triggers', value: '**3 bans** in 10s\n**3 kicks** in 10s\n**2 channel deletes** in 10s\n**2 role deletes** in 10s' },
+            { name: '🔨 Response', value: 'Perpetrator is **banned immediately**, then their actions are **reverted**. You are **DM\'d** with full details.' },
+            { name: '🛡️ Immune Roles', value: `Roles at or above <@&${IMMUNE_ROLE_ID}> (Sr. Admin+) are immune.` },
+            { name: '🛡️  `.antinuke`', value: '> Toggle Anti-Nuke on/off. **Full Access only.** On by default.' },
+            { name: '📊 Current Status', value: `Anti-Nuke: **${antiNukeEnabled ? '🟢 Enabled' : '🔴 Disabled'}**` }
+          )
+          .setFooter({ text: 'This section is only visible to Administrators.' })
+          .setTimestamp();
+
+    return message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+  }
+
   // ─── STEAL ───────────────────────────────────────────────
   if (command === 'steal') {
     try {
@@ -2300,14 +2573,52 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
   }
 });
 
-// ─── GUILD MEMBER REMOVE ─────────────────────────────────────
-client.on('guildMemberRemove', async member => {
-  try {
-    try {
-      const ban = await member.guild.bans.fetch(member.id);
-      if (ban) return;
-    } catch {}
+// ─── GUILD MEMBER ADD (ANTI-RAID) ────────────────────────────
+client.on('guildMemberAdd', async member => {
+  handleRaidJoin(member);
+});
 
+// ─── AUDIT LOG LISTENERS (ANTI-NUKE) ─────────────────────────
+client.on('guildBanAdd', async (ban) => {
+  if (!antiNukeEnabled) return;
+  try {
+    const logs = await ban.guild.fetchAuditLogs({ type: 22, limit: 1 });
+    const entry = logs.entries.first();
+    if (!entry) return;
+    const executorId = entry.executor.id;
+    if (executorId === client.user.id) return;
+    if (isImmune(ban.guild, executorId)) return;
+
+    const data = getNukeData(executorId);
+    if (!data._bannedUsers) data._bannedUsers = [];
+    data._bannedUsers.push(ban.user.id);
+    data.bans.push(Date.now());
+    data.bans = pruneOld(data.bans);
+
+    if (data.bans.length >= 3) await executeNuke(ban.guild, executorId, `Mass Ban (${data.bans.length} bans in 10s)`);
+  } catch {}
+});
+
+client.on('guildMemberRemove', async member => {
+  if (antiNukeEnabled) {
+    try {
+      const logs = await member.guild.fetchAuditLogs({ type: 20, limit: 1 });
+      const entry = logs.entries.first();
+      if (entry && entry.executor.id !== client.user.id && Date.now() - entry.createdTimestamp < 3000) {
+        const executorId = entry.executor.id;
+        if (!isImmune(member.guild, executorId)) {
+          const data = getNukeData(executorId);
+          data.kicks.push(Date.now());
+          data.kicks = pruneOld(data.kicks);
+          if (data.kicks.length >= 3) await executeNuke(member.guild, executorId, `Mass Kick (${data.kicks.length} kicks in 10s)`);
+        }
+      }
+    } catch {}
+  }
+
+  // ─── LEAVE DM (existing) ─────────────────────────────────
+  try {
+    try { const ban = await member.guild.bans.fetch(member.id); if (ban) return; } catch {}
     try {
       const logs = await member.guild.fetchAuditLogs({ type: 20, limit: 5 });
       const kickEntry = logs.entries.find(e => e.target.id === member.id && Date.now() - e.createdTimestamp < 5000);
@@ -2325,11 +2636,7 @@ client.on('guildMemberRemove', async member => {
       await member.user.send({ embeds: [new EmbedBuilder()
         .setColor(0x2b2d31)
         .setAuthor({ name: member.guild.name, iconURL: member.guild.iconURL() })
-        .setDescription(
-`**Hey ${member.user.username}, we noticed you left.**
-
-Your presence in the server mattered and you'll be missed.`
-        )
+        .setDescription(`**Hey ${member.user.username}, we noticed you left.**\n\nYour presence in the server mattered and you'll be missed.`)
         .setTimestamp()] });
       if (invite) await member.user.send(`<:Links:1487353216235737240> **Rejoin anytime:** ${invite.url}`);
       dmStatus = "Yes";
@@ -2341,8 +2648,43 @@ Your presence in the server mattered and you'll be missed.`
       .addFields(
         { name: "<:user:1487021741720076309> User", value: `<@${member.id}>`, inline: true },
         { name: "<:dm:1487024757239971913> DM Sent", value: dmStatus, inline: true }
-      )
-      .setTimestamp());
+      ).setTimestamp());
+  } catch {}
+});
+
+client.on('channelDelete', async channel => {
+  if (!antiNukeEnabled) return;
+  try {
+    const logs = await channel.guild.fetchAuditLogs({ type: 12, limit: 1 });
+    const entry = logs.entries.first();
+    if (!entry) return;
+    const executorId = entry.executor.id;
+    if (executorId === client.user.id) return;
+    if (isImmune(channel.guild, executorId)) return;
+
+    const data = getNukeData(executorId);
+    data.channelDeletes.push(Date.now());
+    data.channelDeletes = pruneOld(data.channelDeletes);
+
+    if (data.channelDeletes.length >= 2) await executeNuke(channel.guild, executorId, `Mass Channel Delete (${data.channelDeletes.length} in 10s)`);
+  } catch {}
+});
+
+client.on('roleDelete', async role => {
+  if (!antiNukeEnabled) return;
+  try {
+    const logs = await role.guild.fetchAuditLogs({ type: 32, limit: 1 });
+    const entry = logs.entries.first();
+    if (!entry) return;
+    const executorId = entry.executor.id;
+    if (executorId === client.user.id) return;
+    if (isImmune(role.guild, executorId)) return;
+
+    const data = getNukeData(executorId);
+    data.roleDeletes.push(Date.now());
+    data.roleDeletes = pruneOld(data.roleDeletes);
+
+    if (data.roleDeletes.length >= 2) await executeNuke(role.guild, executorId, `Mass Role Delete (${data.roleDeletes.length} in 10s)`);
   } catch {}
 });
 
