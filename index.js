@@ -513,7 +513,8 @@ const helpPages = [
       { name: '🗑️  `.purge <amount>`', value: '> Bulk delete up to **100** messages. Requires **Manage Messages**.' },
       { name: '🎲  `.choose <option1> or <option2>`', value: '> Let the bot pick between two or more options for you.' },
       { name: '<:reason:1487022066644291614>  `.afk [reason]`', value: '> Set yourself as AFK. Others who ping you will be notified. Auto-removed when you chat.' },
-      { name: '🏓  `.ping`', value: '> Check if the bot is online.' }
+      { name: '🏓  `.ping`', value: '> Check if the bot is online.' },
+      { name: '🎭  `.td`  /  `.t`  /  `.d`', value: '> Get a random **Truth or Dare**. Use `.t` for truth only, `.d` for dare only. Reroll with the button.' }
     )
     .setFooter({ text: 'Page 2 of 4  •  Utility' })
     .setTimestamp(),
@@ -615,30 +616,6 @@ client.on('messageCreate', async message => {
           .setTimestamp()] }).catch(() => {});
       }
     }
-  }
-
-
-  // ─── AURA REPLIES ────────────────────────────────────────
-  // Triggers ONLY when the entire message is nothing but the name or mention.
-  {
-    const POLTERGEIST_ID = '1212375999132467270';
-    const DIE_ID         = '1443279834938740748';
-    const AURA_EMOJI     = '<:AizenChair:1487355508418674839>';
-
-    const lettersOnly = message.content.replace(/[^a-zA-Z]/g, '').toLowerCase();
-
-    const isPoltergeist =
-      message.content.trim() === `<@${POLTERGEIST_ID}>` ||
-      message.content.trim() === `<@!${POLTERGEIST_ID}>` ||
-      lettersOnly === 'poltergeist';
-
-    const isDie =
-      message.content.trim() === `<@${DIE_ID}>` ||
-      message.content.trim() === `<@!${DIE_ID}>` ||
-      lettersOnly === 'die';
-
-    if (isPoltergeist) return message.reply(`Poltergeist?? Aura. ${AURA_EMOJI}`);
-    if (isDie)         return message.reply(`Die?? Aura. ${AURA_EMOJI}`);
   }
 
   if (!message.content.startsWith(prefix)) return;
