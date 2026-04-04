@@ -10,6 +10,122 @@ const {
   TextInputBuilder,
   TextInputStyle
 } = require('discord.js');
+const mongoose = require('mongoose');
+
+// ─── MONGODB CONNECTION ──────────────────────────────────────
+mongoose.connect(process.env.MONGO_URL)
+  .then(() => console.log('[MongoDB] Connected successfully.'))
+  .catch(err => console.error('[MongoDB] Connection error:', err));
+
+// ─── SCHEMAS ─────────────────────────────────────────────────
+const warnSchema = new mongoose.Schema({
+  guildId:  { type: String, required: true },
+  userId:   { type: String, required: true },
+  warns:    [{
+    reason: String,
+    by:     String,
+    at:     Number
+  }]
+});
+warnSchema.index({ guildId: 1, userId: 1 }, { unique: true });
+const WarnModel = mongoose.model('Warning', warnSchema);
+
+const marriageSchema = new mongoose.Schema({
+  guildId:   { type: String, required: true },
+  userId:    { type: String, required: true },
+  spouseId:  { type: String, required: true }
+});
+marriageSchema.index({ guildId: 1, userId: 1 }, { unique: true });
+const MarriageModel = mongoose.model('Marriage', marriageSchema);
+
+const msgSchema = new mongoose.Schema({
+  guildId: { type: String, required: true },
+  userId:  { type: String, required: true },
+  allTime: { type: Number, default: 0 },
+  daily:   { type: Number, default: 0 },
+  dailyDate: { type: String, default: '' }
+});
+msgSchema.index({ guildId: 1, userId: 1 }, { unique: true });
+const MsgModel = mongoose.model('MessageCount', msgSchema);
+
+// ─── DB HELPERS: WARNINGS ─────────────────────────────────────
+async function getWarns(guildId, userId) {
+  const doc = await WarnModel.findOne({ guildId, userId });
+  return doc ? doc.warns : [];
+}
+async function addWarn(guildId, userId, warn) {
+  await WarnModel.findOneAndUpdate(
+    { guildId, userId },
+    { $push: { warns: warn } },
+    { upsert: true, new: true }
+  );
+}
+async function clearWarns(guildId, userId) {
+  await WarnModel.findOneAndUpdate({ guildId, userId }, { $set: { warns: [] } }, { upsert: true });
+}
+async function removeLastWarn(guildId, userId) {
+  const doc = await WarnModel.findOne({ guildId, userId });
+  if (!doc || doc.warns.length === 0) return 0;
+  doc.warns.pop();
+  await doc.save();
+  return doc.warns.length;
+}
+async function getAllWarnsForGuild(guildId) {
+  return WarnModel.find({ guildId, 'warns.0': { $exists: true } });
+}
+
+// ─── DB HELPERS: MARRIAGES ────────────────────────────────────
+async function getMarriage(guildId, userId) {
+  const doc = await MarriageModel.findOne({ guildId, userId });
+  return doc ? doc.spouseId : null;
+}
+async function setMarriage(guildId, userId1, userId2) {
+  await MarriageModel.findOneAndUpdate({ guildId, userId: userId1 }, { spouseId: userId2 }, { upsert: true });
+  await MarriageModel.findOneAndUpdate({ guildId, userId: userId2 }, { spouseId: userId1 }, { upsert: true });
+}
+async function deleteMarriage(guildId, userId) {
+  const doc = await MarriageModel.findOne({ guildId, userId });
+  if (!doc) return null;
+  const spouseId = doc.spouseId;
+  await MarriageModel.deleteOne({ guildId, userId });
+  await MarriageModel.deleteOne({ guildId, userId: spouseId });
+  return spouseId;
+}
+
+// ─── DB HELPERS: MESSAGES ─────────────────────────────────────
+function getTodayIST() {
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+async function incrementMsgCount(guildId, userId) {
+  const today = getTodayIST();
+  const doc = await MsgModel.findOne({ guildId, userId });
+  if (!doc) {
+    await MsgModel.create({ guildId, userId, allTime: 1, daily: 1, dailyDate: today });
+  } else {
+    const isNewDay = doc.dailyDate !== today;
+    await MsgModel.findOneAndUpdate(
+      { guildId, userId },
+      { $inc: { allTime: 1 }, $set: { daily: isNewDay ? 1 : doc.daily + 1, dailyDate: today } }
+    );
+  }
+}
+async function getMsgCount(guildId, userId) {
+  const today = getTodayIST();
+  const doc = await MsgModel.findOne({ guildId, userId });
+  if (!doc) return { allTime: 0, daily: 0 };
+  const daily = doc.dailyDate === today ? doc.daily : 0;
+  return { allTime: doc.allTime, daily };
+}
+async function getAllMsgCounts(guildId) {
+  return MsgModel.find({ guildId }).sort({ allTime: -1 });
+}
+async function getDailyMsgCounts(guildId) {
+  const today = getTodayIST();
+  return MsgModel.find({ guildId, dailyDate: today }).sort({ daily: -1 });
+}
+async function resetDailyMsgCounts() {
+  await MsgModel.updateMany({}, { $set: { daily: 0, dailyDate: getTodayIST() } });
+}
 
 const client = new Client({
   intents: [
@@ -22,51 +138,9 @@ const client = new Client({
 });
 
 const prefix = ".";
-const fs = require('fs');
-const WARNS_FILE = './warnings.json';
-const MARRY_FILE = './marriages.json';
+const HONORED_ROLE_ID = '1489865370167939155';
 const afkMap = new Map();
 const cooldowns = new Map();
-
-function loadWarns() {
-  if (!fs.existsSync(WARNS_FILE)) return {};
-  return JSON.parse(fs.readFileSync(WARNS_FILE, 'utf8'));
-}
-function saveWarns(data) {
-  fs.writeFileSync(WARNS_FILE, JSON.stringify(data, null, 2));
-}
-
-function loadMarriages() {
-  if (!fs.existsSync(MARRY_FILE)) return {};
-  return JSON.parse(fs.readFileSync(MARRY_FILE, 'utf8'));
-}
-function saveMarriages(data) {
-  fs.writeFileSync(MARRY_FILE, JSON.stringify(data, null, 2));
-}
-
-
-// ─── MESSAGE TRACKING ────────────────────────────────────────
-const MSG_FILE       = './messages.json';
-const DAILY_MSG_FILE = './daily_messages.json';
-const HONORED_ROLE_ID = '1489865370167939155';
-
-function loadMsgData() {
-  if (!fs.existsSync(MSG_FILE)) return {};
-  try { return JSON.parse(fs.readFileSync(MSG_FILE, 'utf8')); } catch { return {}; }
-}
-function saveMsgData(data) {
-  fs.writeFileSync(MSG_FILE, JSON.stringify(data));
-}
-function loadDailyData() {
-  if (!fs.existsSync(DAILY_MSG_FILE)) return { date: getTodayIST(), counts: {} };
-  try { return JSON.parse(fs.readFileSync(DAILY_MSG_FILE, 'utf8')); } catch { return { date: getTodayIST(), counts: {} }; }
-}
-function saveDailyData(data) {
-  fs.writeFileSync(DAILY_MSG_FILE, JSON.stringify(data));
-}
-function getTodayIST() {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
 
 function parseTime(time) {
   const num = parseInt(time);
@@ -952,20 +1026,7 @@ client.on('messageCreate', async message => {
 
   // ─── COUNT MESSAGES ───────────────────────────────────────
   if (message.guild) {
-    // All-time
-    const msgData = loadMsgData();
-    const gKey = message.guild.id;
-    if (!msgData[gKey]) msgData[gKey] = {};
-    msgData[gKey][message.author.id] = (msgData[gKey][message.author.id] || 0) + 1;
-    saveMsgData(msgData);
-
-    // Daily — reset if new day (IST)
-    const daily = loadDailyData();
-    const todayIST = getTodayIST();
-    if (daily.date !== todayIST) { daily.date = todayIST; daily.counts = {}; }
-    if (!daily.counts[gKey]) daily.counts[gKey] = {};
-    daily.counts[gKey][message.author.id] = (daily.counts[gKey][message.author.id] || 0) + 1;
-    saveDailyData(daily);
+    incrementMsgCount(message.guild.id, message.author.id).catch(() => {});
   }
 
   handleAntiSpam(message);
@@ -1191,8 +1252,8 @@ client.on('messageCreate', async message => {
       const createdAt = Math.floor(user.createdTimestamp / 1000);
       const roles = target.roles.cache.filter(r => r.id !== message.guild.id).sort((a, b) => b.position - a.position);
       const topRole = roles.first();
-      const warns = loadWarns();
-      const warnCount = (warns[`${message.guild.id}_${user.id}`] || []).length;
+      const warnList = await getWarns(message.guild.id, user.id);
+      const warnCount = warnList.length;
       const isBoosting = !!target.premiumSince;
 
       const embed = new EmbedBuilder()
@@ -1701,13 +1762,9 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
 
       const reason = args.slice(2).join(" ") || "No reason provided";
 
-      const warns = loadWarns();
-      const key = `${message.guild.id}_${member.id}`;
-      if (!warns[key]) warns[key] = [];
-      warns[key].push({ reason, by: invokerId, at: Date.now() });
-      saveWarns(warns);
-
-      const count = warns[key].length;
+      await addWarn(message.guild.id, member.id, { reason, by: invokerId, at: Date.now() });
+      const warnList = await getWarns(message.guild.id, member.id);
+      const count = warnList.length;
 
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
@@ -1776,11 +1833,9 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       const member = await resolveMember(message.guild, args[1]);
       if (!member) return message.reply("Mention a user or provide a valid user ID.");
 
-      const warns = loadWarns();
-      const key = `${message.guild.id}_${member.id}`;
-      const prev = warns[key]?.length || 0;
-      warns[key] = [];
-      saveWarns(warns);
+      const prevList = await getWarns(message.guild.id, member.id);
+      const prev = prevList.length;
+      await clearWarns(message.guild.id, member.id);
 
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
@@ -1816,13 +1871,10 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       const member = await resolveMember(message.guild, args[1]);
       if (!member) return message.reply("Mention a user or provide a valid user ID.");
 
-      const warns = loadWarns();
-      const key = `${message.guild.id}_${member.id}`;
-      if (!warns[key] || warns[key].length === 0) return message.reply("This user has no warnings.");
+      const existingWarns = await getWarns(message.guild.id, member.id);
+      if (existingWarns.length === 0) return message.reply("This user has no warnings.");
 
-      warns[key].pop();
-      saveWarns(warns);
-      const remaining = warns[key].length;
+      const remaining = await removeLastWarn(message.guild.id, member.id);
 
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
@@ -1852,9 +1904,7 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
         ? (await resolveMember(message.guild, args[1])) || await message.guild.members.fetch(message.author.id)
         : await message.guild.members.fetch(message.author.id);
 
-      const warns = loadWarns();
-      const key = `${message.guild.id}_${member.id}`;
-      const list = warns[key] || [];
+      const list = await getWarns(message.guild.id, member.id);
 
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
@@ -2104,27 +2154,23 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
         });
       }
 
-      const marriages = loadMarriages();
-      const guildKey = message.guild.id;
-      if (!marriages[guildKey]) marriages[guildKey] = {};
-
-      if (marriages[guildKey][message.author.id]) {
-        const spouseId = marriages[guildKey][message.author.id];
+      const mySpouse = await getMarriage(message.guild.id, message.author.id);
+      if (mySpouse) {
         return message.channel.send({ embeds: [new EmbedBuilder()
           .setColor(0xff3b3b)
           .setAuthor({ name: 'Already Married 💍' })
-          .setDescription(`<:flash:1487027526394974218> **You are already married to <@${spouseId}>!**\n\nUse \`.divorce\` first if you want to remarry.`)
+          .setDescription(`<:flash:1487027526394974218> **You are already married to <@${mySpouse}>!**\n\nUse \`.divorce\` first if you want to remarry.`)
           .setTimestamp()],
           components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
         });
       }
 
-      if (marriages[guildKey][target.id]) {
-        const spouseId = marriages[guildKey][target.id];
+      const targetSpouse = await getMarriage(message.guild.id, target.id);
+      if (targetSpouse) {
         return message.channel.send({ embeds: [new EmbedBuilder()
           .setColor(0xff3b3b)
           .setAuthor({ name: 'Already Taken 💔' })
-          .setDescription(`<:flash:1487027526394974218> **<@${target.id}> is already married to <@${spouseId}>!**`)
+          .setDescription(`<:flash:1487027526394974218> **<@${target.id}> is already married to <@${targetSpouse}>!**`)
           .setTimestamp()],
           components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
         });
@@ -2172,10 +2218,9 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
   // ─── DIVORCE ─────────────────────────────────────────────
   if (command === 'divorce') {
     try {
-      const marriages = loadMarriages();
-      const guildKey = message.guild.id;
+      const spouseId = await deleteMarriage(message.guild.id, message.author.id);
 
-      if (!marriages[guildKey]?.[message.author.id]) {
+      if (!spouseId) {
         return message.channel.send({ embeds: [new EmbedBuilder()
           .setColor(0xff3b3b)
           .setAuthor({ name: 'Not Married' })
@@ -2184,11 +2229,6 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
           components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))]
         });
       }
-
-      const spouseId = marriages[guildKey][message.author.id];
-      delete marriages[guildKey][message.author.id];
-      delete marriages[guildKey][spouseId];
-      saveMarriages(marriages);
 
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
@@ -2250,10 +2290,9 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
         });
       }
 
-      const warns   = loadWarns();
-      const entries = Object.entries(warns)
-        .filter(([key, list]) => key.startsWith(message.guild.id) && list.length > 0)
-        .map(([key, list]) => ({ userId: key.split('_')[1], count: list.length }))
+      const warnDocs = await getAllWarnsForGuild(message.guild.id);
+      const entries = warnDocs
+        .map(doc => ({ userId: doc.userId, count: doc.warns.length }))
         .sort((a, b) => b.count - a.count);
 
       if (entries.length === 0) {
@@ -2571,18 +2610,9 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
       const target = args[1] ? await resolveMember(message.guild, args[1]) : message.member;
       if (!target) return message.reply("User not found.");
 
-      const msgData = loadMsgData();
-      const daily   = loadDailyData();
-      const todayIST = getTodayIST();
-      if (daily.date !== todayIST) { daily.date = todayIST; daily.counts = {}; }
-
-      const gKey      = message.guild.id;
-      const allTime   = (msgData[gKey]?.[target.id] || 0);
-      const todayCount = (daily.counts[gKey]?.[target.id] || 0);
-
-      // Rank calculation
-      const allEntries = Object.entries(msgData[gKey] || {}).sort((a,b) => b[1]-a[1]);
-      const rank = allEntries.findIndex(([id]) => id === target.id) + 1;
+      const { allTime, daily: todayCount } = await getMsgCount(message.guild.id, target.id);
+      const allDocs = await getAllMsgCounts(message.guild.id);
+      const rank = allDocs.findIndex(doc => doc.userId === target.id) + 1;
 
       const embed = new EmbedBuilder()
         .setColor(0x2b2d31)
@@ -2609,32 +2639,30 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
     if (msgSubs.includes(sub)) {
       // All-time message leaderboard
       try {
-        const msgData = loadMsgData();
-        const gKey = message.guild.id;
-        const entries = Object.entries(msgData[gKey] || {}).sort((a,b) => b[1]-a[1]);
-        if (entries.length === 0) return message.reply("No messages tracked yet!");
+        const docs = await getAllMsgCounts(message.guild.id);
+        if (docs.length === 0) return message.reply("No messages tracked yet!");
 
         const PAGE_SIZE = 10;
-        const totalPages = Math.ceil(entries.length / PAGE_SIZE);
+        const totalPages = Math.ceil(docs.length / PAGE_SIZE);
 
         async function buildLbEmbed(page) {
-          const slice = entries.slice(page * PAGE_SIZE, (page+1) * PAGE_SIZE);
-          const lines = await Promise.all(slice.map(async ([uid, count], i) => {
+          const slice = docs.slice(page * PAGE_SIZE, (page+1) * PAGE_SIZE);
+          const lines = await Promise.all(slice.map(async (doc, i) => {
             const rank = page * PAGE_SIZE + i + 1;
             const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `**#${rank}**`;
             let name;
             try {
-              const mem = await message.guild.members.fetch(uid).catch(() => null);
-              name = mem ? mem.displayName : `<@${uid}>`;
-            } catch { name = `<@${uid}>`; }
-            return `${medal} ${name} — **${count.toLocaleString()}** messages`;
+              const mem = await message.guild.members.fetch(doc.userId).catch(() => null);
+              name = mem ? mem.displayName : `<@${doc.userId}>`;
+            } catch { name = `<@${doc.userId}>`; }
+            return `${medal} ${name} — **${doc.allTime.toLocaleString()}** messages`;
           }));
 
           return new EmbedBuilder()
             .setColor(0x2b2d31)
             .setAuthor({ name: `${message.guild.name} — Message Leaderboard`, iconURL: message.guild.iconURL() })
             .setDescription(lines.join('\n'))
-            .setFooter({ text: `Page ${page+1}/${totalPages} · ${entries.length} members tracked` })
+            .setFooter({ text: `Page ${page+1}/${totalPages} · ${docs.length} members tracked` })
             .setTimestamp();
         }
 
@@ -2648,33 +2676,29 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
           makeDeleteBtn(invokerId)
         );
 
-        message.channel.send({ embeds: [embed], components: [makeRow(page)], _lbMeta: { type: 'alltime', totalPages, entries: entries.map(([id,c])=>({id,c})) } });
+        message.channel.send({ embeds: [embed], components: [makeRow(page)] });
       } catch (err) { console.error(err); message.reply("Error loading leaderboard."); }
 
     } else if (dailySubs.includes(sub)) {
       // Daily message leaderboard
       try {
-        const daily = loadDailyData();
-        const todayIST = getTodayIST();
-        if (daily.date !== todayIST) { daily.date = todayIST; daily.counts = {}; }
-        const gKey = message.guild.id;
-        const entries = Object.entries(daily.counts[gKey] || {}).sort((a,b) => b[1]-a[1]);
-        if (entries.length === 0) return message.reply("No messages tracked today yet!");
+        const dailyDocs = await getDailyMsgCounts(message.guild.id);
+        if (dailyDocs.length === 0) return message.reply("No messages tracked today yet!");
 
         const PAGE_SIZE = 10;
-        const totalPages = Math.ceil(entries.length / PAGE_SIZE);
+        const totalPages = Math.ceil(dailyDocs.length / PAGE_SIZE);
 
         async function buildDailyEmbed(page) {
-          const slice = entries.slice(page * PAGE_SIZE, (page+1) * PAGE_SIZE);
-          const lines = await Promise.all(slice.map(async ([uid, count], i) => {
+          const slice = dailyDocs.slice(page * PAGE_SIZE, (page+1) * PAGE_SIZE);
+          const lines = await Promise.all(slice.map(async (doc, i) => {
             const rank = page * PAGE_SIZE + i + 1;
             const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `**#${rank}**`;
             let name;
             try {
-              const mem = await message.guild.members.fetch(uid).catch(() => null);
-              name = mem ? mem.displayName : `<@${uid}>`;
-            } catch { name = `<@${uid}>`; }
-            return `${medal} ${name} — **${count.toLocaleString()}** messages today`;
+              const mem = await message.guild.members.fetch(doc.userId).catch(() => null);
+              name = mem ? mem.displayName : `<@${doc.userId}>`;
+            } catch { name = `<@${doc.userId}>`; }
+            return `${medal} ${name} — **${doc.daily.toLocaleString()}** messages today`;
           }));
 
           return new EmbedBuilder()
@@ -2766,11 +2790,11 @@ client.on('interactionCreate', async interaction => {
       }
 
       // Accept
-      const marriages = loadMarriages();
-      const guildKey  = interaction.guild.id;
-      if (!marriages[guildKey]) marriages[guildKey] = {};
+      const guildKey = interaction.guild.id;
+      const p1Spouse = await getMarriage(guildKey, proposerId);
+      const p2Spouse = await getMarriage(guildKey, targetId);
 
-      if (marriages[guildKey][proposerId] || marriages[guildKey][targetId]) {
+      if (p1Spouse || p2Spouse) {
         const alreadyEmbed = new EmbedBuilder()
           .setColor(0xff3b3b)
           .setAuthor({ name: 'Already Married 💍' })
@@ -2779,9 +2803,7 @@ client.on('interactionCreate', async interaction => {
         return interaction.update({ embeds: [alreadyEmbed], components: [] });
       }
 
-      marriages[guildKey][proposerId] = targetId;
-      marriages[guildKey][targetId]   = proposerId;
-      saveMarriages(marriages);
+      await setMarriage(guildKey, proposerId, targetId);
 
       const marriedAt = Math.floor(Date.now() / 1000);
 
@@ -2824,17 +2846,12 @@ client.on('interactionCreate', async interaction => {
       const currentPage = parseInt(parts2[2]);
       const gKey = interaction.guild.id;
 
-      const msgData = loadMsgData();
-      const daily = loadDailyData();
-      const todayIST = getTodayIST();
-      if (daily.date !== todayIST) { daily.date = todayIST; daily.counts = {}; }
-
-      const entries = isDaily
-        ? Object.entries(daily.counts[gKey] || {}).sort((a,b) => b[1]-a[1])
-        : Object.entries(msgData[gKey] || {}).sort((a,b) => b[1]-a[1]);
+      const docs = isDaily
+        ? await getDailyMsgCounts(gKey)
+        : await getAllMsgCounts(gKey);
 
       const PAGE_SIZE = 10;
-      const totalPages = Math.ceil(entries.length / PAGE_SIZE);
+      const totalPages = Math.ceil(docs.length / PAGE_SIZE);
 
       let newPage = currentPage;
       if (action === 'first') newPage = 0;
@@ -2842,15 +2859,16 @@ client.on('interactionCreate', async interaction => {
       else if (action === 'next') newPage = Math.min(totalPages - 1, currentPage + 1);
       else if (action === 'last') newPage = totalPages - 1;
 
-      const slice = entries.slice(newPage * PAGE_SIZE, (newPage+1) * PAGE_SIZE);
-      const lines = await Promise.all(slice.map(async ([uid, count], i) => {
+      const slice = docs.slice(newPage * PAGE_SIZE, (newPage+1) * PAGE_SIZE);
+      const lines = await Promise.all(slice.map(async (doc, i) => {
         const rank = newPage * PAGE_SIZE + i + 1;
         const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `**#${rank}**`;
         let name;
         try {
-          const mem = await interaction.guild.members.fetch(uid).catch(() => null);
-          name = mem ? mem.displayName : `<@${uid}>`;
-        } catch { name = `<@${uid}>`; }
+          const mem = await interaction.guild.members.fetch(doc.userId).catch(() => null);
+          name = mem ? mem.displayName : `<@${doc.userId}>`;
+        } catch { name = `<@${doc.userId}>`; }
+        const count = isDaily ? doc.daily : doc.allTime;
         return `${medal} ${name} — **${count.toLocaleString()}** messages${isDaily ? ' today' : ''}`;
       }));
 
@@ -3489,26 +3507,20 @@ function msUntilISTTime(hour, minute) {
 
 async function runMidnightTasks() {
   try {
-    // Reset daily messages
-    const daily = loadDailyData();
-    daily.date = getTodayIST();
-    daily.counts = {};
-    saveDailyData(daily);
+    await resetDailyMsgCounts();
     console.log('[Midnight IST] Daily message counts reset.');
   } catch (e) { console.error('Midnight reset error:', e); }
 
-  // Schedule next midnight
   setTimeout(runMidnightTasks, msUntilISTTime(0, 0));
 }
 
 async function runHonoredOne() {
   try {
     for (const [guildId, guild] of client.guilds.cache) {
-      const msgData = loadMsgData();
-      const entries = Object.entries(msgData[guildId] || {}).sort((a,b) => b[1]-a[1]);
-      if (entries.length === 0) continue;
+      const docs = await getAllMsgCounts(guildId);
+      if (docs.length === 0) continue;
 
-      const topId = entries[0][0];
+      const topId = docs[0].userId;
       const honoredRole = guild.roles.cache.get(HONORED_ROLE_ID);
       if (!honoredRole) continue;
 
@@ -3529,7 +3541,7 @@ async function runHonoredOne() {
       sendLog(guild, new EmbedBuilder()
         .setColor(0xFFD700)
         .setAuthor({ name: '👑 Honored One Updated', iconURL: guild.iconURL() })
-        .setDescription(`<@${topId}> is now the **Honored One** with **${entries[0][1].toLocaleString()} messages**!`)
+        .setDescription(`<@${topId}> is now the **Honored One** with **${docs[0].allTime.toLocaleString()} messages**!`)
         .setTimestamp());
 
       console.log(`[Honored One] Set ${topId} as Honored One in ${guild.name}`);
