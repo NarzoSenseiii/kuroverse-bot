@@ -2839,59 +2839,69 @@ client.on('interactionCreate', async interaction => {
 
     // ─── LEADERBOARD PAGINATION ───────────────────────────
     if (customId.startsWith('lb_') || customId.startsWith('dlb_')) {
-      const isDaily = customId.startsWith('dlb_');
-      const parts2 = customId.split('_');
-      // format: lb_action_currentPage_invokerId or dlb_action_currentPage_invokerId
-      const action = parts2[1];
-      const currentPage = parseInt(parts2[2]);
-      const gKey = interaction.guild.id;
+      try {
+        const isDaily = customId.startsWith('dlb_');
+        const parts2 = customId.split('_');
+        const action = parts2[1];
+        const currentPage = parseInt(parts2[2]);
+        const gKey = interaction.guild.id;
 
-      const docs = isDaily
-        ? await getDailyMsgCounts(gKey)
-        : await getAllMsgCounts(gKey);
+        const docs = isDaily
+          ? await getDailyMsgCounts(gKey)
+          : await getAllMsgCounts(gKey);
 
-      const PAGE_SIZE = 10;
-      const totalPages = Math.ceil(docs.length / PAGE_SIZE);
+        if (!docs || docs.length === 0) {
+          return interaction.reply({ content: 'No data available.', ephemeral: true });
+        }
 
-      let newPage = currentPage;
-      if (action === 'first') newPage = 0;
-      else if (action === 'prev') newPage = Math.max(0, currentPage - 1);
-      else if (action === 'next') newPage = Math.min(totalPages - 1, currentPage + 1);
-      else if (action === 'last') newPage = totalPages - 1;
+        const PAGE_SIZE = 10;
+        const totalPages = Math.ceil(docs.length / PAGE_SIZE);
 
-      const slice = docs.slice(newPage * PAGE_SIZE, (newPage+1) * PAGE_SIZE);
-      const lines = await Promise.all(slice.map(async (doc, i) => {
-        const rank = newPage * PAGE_SIZE + i + 1;
-        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `**#${rank}**`;
-        let name;
-        try {
-          const mem = await interaction.guild.members.fetch(doc.userId).catch(() => null);
-          name = mem ? mem.displayName : `<@${doc.userId}>`;
-        } catch { name = `<@${doc.userId}>`; }
-        const count = isDaily ? doc.daily : doc.allTime;
-        return `${medal} ${name} — **${count.toLocaleString()}** messages${isDaily ? ' today' : ''}`;
-      }));
+        let newPage = currentPage;
+        if (action === 'first') newPage = 0;
+        else if (action === 'prev') newPage = Math.max(0, currentPage - 1);
+        else if (action === 'next') newPage = Math.min(totalPages - 1, currentPage + 1);
+        else if (action === 'last') newPage = totalPages - 1;
 
-      const embed = new EmbedBuilder()
-        .setColor(0x2b2d31)
-        .setAuthor({
-          name: `${interaction.guild.name} — ${isDaily ? 'Daily ' : ''}Message Leaderboard`,
-          iconURL: interaction.guild.iconURL()
-        })
-        .setDescription(lines.join('\n'))
-        .setFooter({ text: `Page ${newPage+1}/${totalPages} · ${isDaily ? 'Resets at midnight IST' : `${entries.length} members tracked`}` })
-        .setTimestamp();
+        const slice = docs.slice(newPage * PAGE_SIZE, (newPage+1) * PAGE_SIZE);
+        const lines = await Promise.all(slice.map(async (doc, i) => {
+          const rank = newPage * PAGE_SIZE + i + 1;
+          const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `**#${rank}**`;
+          let name;
+          try {
+            const mem = await interaction.guild.members.fetch(doc.userId).catch(() => null);
+            name = mem ? mem.displayName : `<@${doc.userId}>`;
+          } catch { name = `<@${doc.userId}>`; }
+          const count = isDaily ? doc.daily : doc.allTime;
+          return `${medal} ${name} — **${count.toLocaleString()}** messages${isDaily ? ' today' : ''}`;
+        }));
 
-      const prefix2 = isDaily ? 'dlb' : 'lb';
-      const makeRow = (p) => new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`${prefix2}_first_${p}_${embeddedInvokerId}`).setLabel('⏮').setStyle(ButtonStyle.Secondary).setDisabled(p === 0),
-        new ButtonBuilder().setCustomId(`${prefix2}_prev_${p}_${embeddedInvokerId}`).setLabel('◀').setStyle(ButtonStyle.Secondary).setDisabled(p === 0),
-        new ButtonBuilder().setCustomId(`${prefix2}_next_${p}_${embeddedInvokerId}`).setLabel('▶').setStyle(ButtonStyle.Secondary).setDisabled(p === totalPages - 1),
-        new ButtonBuilder().setCustomId(`${prefix2}_last_${p}_${embeddedInvokerId}`).setLabel('⏭').setStyle(ButtonStyle.Secondary).setDisabled(p === totalPages - 1),
-        makeDeleteBtn(embeddedInvokerId)
-      );
+        const embed = new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setAuthor({
+            name: `${interaction.guild.name} — ${isDaily ? 'Daily ' : ''}Message Leaderboard`,
+            iconURL: interaction.guild.iconURL()
+          })
+          .setDescription(lines.join('\n'))
+          .setFooter({ text: `Page ${newPage+1}/${totalPages} · ${isDaily ? 'Resets at midnight IST' : `${docs.length} members tracked`}` })
+          .setTimestamp();
 
-      return interaction.update({ embeds: [embed], components: [makeRow(newPage)] });
+        const prefix2 = isDaily ? 'dlb' : 'lb';
+        const makeRow = (p) => new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`${prefix2}_first_${p}_${embeddedInvokerId}`).setLabel('⏮').setStyle(ButtonStyle.Secondary).setDisabled(p === 0),
+          new ButtonBuilder().setCustomId(`${prefix2}_prev_${p}_${embeddedInvokerId}`).setLabel('◀').setStyle(ButtonStyle.Secondary).setDisabled(p === 0),
+          new ButtonBuilder().setCustomId(`${prefix2}_next_${p}_${embeddedInvokerId}`).setLabel('▶').setStyle(ButtonStyle.Secondary).setDisabled(p === totalPages - 1),
+          new ButtonBuilder().setCustomId(`${prefix2}_last_${p}_${embeddedInvokerId}`).setLabel('⏭').setStyle(ButtonStyle.Secondary).setDisabled(p === totalPages - 1),
+          makeDeleteBtn(embeddedInvokerId)
+        );
+
+        return interaction.update({ embeds: [embed], components: [makeRow(newPage)] });
+      } catch (err) {
+        console.error('LB button error:', err);
+        if (!interaction.replied && !interaction.deferred) {
+          interaction.reply({ content: 'Something went wrong loading the leaderboard.', ephemeral: true }).catch(() => {});
+        }
+      }
     }
 
     // ─── TD REROLL ────────────────────────────────────────
