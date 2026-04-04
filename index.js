@@ -26,7 +26,6 @@ const fs = require('fs');
 const WARNS_FILE = './warnings.json';
 const MARRY_FILE = './marriages.json';
 const afkMap = new Map();
-const cooldowns = new Map();
 
 function loadWarns() {
   if (!fs.existsSync(WARNS_FILE)) return {};
@@ -1001,28 +1000,6 @@ client.on('messageCreate', async message => {
   const args = message.content.slice(prefix.length).split(' ');
   const command = args[0].toLowerCase();
   const invokerId = message.author.id;
-
-  // ─── COOLDOWN (non-mod commands only) ────────────────────
-  const MOD_COMMANDS = new Set([
-    'mute','unmute','ban','unban','kick','warn','clearwarns','removewarn',
-    'banlist','warnlist','lock','unlock','nick','role','purge','as',
-    'antinuke','antiraid','endraid'
-  ]);
-  if (!MOD_COMMANDS.has(command)) {
-    const cooldownKey = `${message.author.id}_${command}`;
-    const now = Date.now();
-    if (cooldowns.has(cooldownKey)) {
-      const remaining = ((cooldowns.get(cooldownKey) + 5000) - now) / 1000;
-      if (remaining > 0) {
-        return message.channel.send({ embeds: [new EmbedBuilder()
-          .setColor(0xff3b3b)
-          .setDescription(`<:flash:1487027526394974218> Slow down! You can use this command again in **${remaining.toFixed(1)}s**.`)
-          .setTimestamp()], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
-      }
-    }
-    cooldowns.set(cooldownKey, now);
-    setTimeout(() => cooldowns.delete(cooldownKey), 5000);
-  }
 
   // ─── PING ────────────────────────────────────────────────
   if (command === 'ping') {
