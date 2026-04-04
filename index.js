@@ -44,6 +44,30 @@ function saveMarriages(data) {
   fs.writeFileSync(MARRY_FILE, JSON.stringify(data, null, 2));
 }
 
+
+// ─── MESSAGE TRACKING ────────────────────────────────────────
+const MSG_FILE       = './messages.json';
+const DAILY_MSG_FILE = './daily_messages.json';
+const HONORED_ROLE_ID = '1489865370167939155';
+
+function loadMsgData() {
+  if (!fs.existsSync(MSG_FILE)) return {};
+  try { return JSON.parse(fs.readFileSync(MSG_FILE, 'utf8')); } catch { return {}; }
+}
+function saveMsgData(data) {
+  fs.writeFileSync(MSG_FILE, JSON.stringify(data));
+}
+function loadDailyData() {
+  if (!fs.existsSync(DAILY_MSG_FILE)) return { date: getTodayIST(), counts: {} };
+  try { return JSON.parse(fs.readFileSync(DAILY_MSG_FILE, 'utf8')); } catch { return { date: getTodayIST(), counts: {} }; }
+}
+function saveDailyData(data) {
+  fs.writeFileSync(DAILY_MSG_FILE, JSON.stringify(data));
+}
+function getTodayIST() {
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 function parseTime(time) {
   const num = parseInt(time);
   if (time.endsWith('s')) return num * 1000;
@@ -926,6 +950,24 @@ client.once('ready', async () => {
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
+  // ─── COUNT MESSAGES ───────────────────────────────────────
+  if (message.guild) {
+    // All-time
+    const msgData = loadMsgData();
+    const gKey = message.guild.id;
+    if (!msgData[gKey]) msgData[gKey] = {};
+    msgData[gKey][message.author.id] = (msgData[gKey][message.author.id] || 0) + 1;
+    saveMsgData(msgData);
+
+    // Daily — reset if new day (IST)
+    const daily = loadDailyData();
+    const todayIST = getTodayIST();
+    if (daily.date !== todayIST) { daily.date = todayIST; daily.counts = {}; }
+    if (!daily.counts[gKey]) daily.counts[gKey] = {};
+    daily.counts[gKey][message.author.id] = (daily.counts[gKey][message.author.id] || 0) + 1;
+    saveDailyData(daily);
+  }
+
   handleAntiSpam(message);
 
   // AFK: remove AFK if person types
@@ -960,8 +1002,12 @@ client.on('messageCreate', async message => {
   const command = args[0].toLowerCase();
   const invokerId = message.author.id;
 
-  // ─── COOLDOWN ─────────────────────────────────────────────
-  const MOD_COMMANDS = new Set(['mute','unmute','ban','unban','kick','warn','clearwarns','removewarn','warns','warnlist','banlist','lock','unlock','nick','role','purge','as','antinuke','endraid','antispam']);
+  // ─── COOLDOWN (non-mod commands only) ────────────────────
+  const MOD_COMMANDS = new Set([
+    'mute','unmute','ban','unban','kick','warn','clearwarns','removewarn',
+    'banlist','warnlist','lock','unlock','nick','role','purge','as',
+    'antinuke','antiraid','endraid'
+  ]);
   if (!MOD_COMMANDS.has(command)) {
     const cooldownKey = `${message.author.id}_${command}`;
     const now = Date.now();
@@ -971,7 +1017,7 @@ client.on('messageCreate', async message => {
         return message.channel.send({ embeds: [new EmbedBuilder()
           .setColor(0xff3b3b)
           .setDescription(`<:flash:1487027526394974218> Slow down! You can use this command again in **${remaining.toFixed(1)}s**.`)
-          .setTimestamp()], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(message.author.id))] });
+          .setTimestamp()], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
       }
     }
     cooldowns.set(cooldownKey, now);
@@ -2519,6 +2565,141 @@ ${invite ? `<:Links:1487353216235737240> **Rejoin:** ${invite.url}` : ""}`
     } catch (err) { console.error(err); message.reply('Error running upload command.'); }
   }
 
+  // ─── MESSAGE COUNT ────────────────────────────────────────
+  if (command === 'm' || command === 'message' || command === 'messages') {
+    try {
+      const target = args[1] ? await resolveMember(message.guild, args[1]) : message.member;
+      if (!target) return message.reply("User not found.");
+
+      const msgData = loadMsgData();
+      const daily   = loadDailyData();
+      const todayIST = getTodayIST();
+      if (daily.date !== todayIST) { daily.date = todayIST; daily.counts = {}; }
+
+      const gKey      = message.guild.id;
+      const allTime   = (msgData[gKey]?.[target.id] || 0);
+      const todayCount = (daily.counts[gKey]?.[target.id] || 0);
+
+      // Rank calculation
+      const allEntries = Object.entries(msgData[gKey] || {}).sort((a,b) => b[1]-a[1]);
+      const rank = allEntries.findIndex(([id]) => id === target.id) + 1;
+
+      const embed = new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setAuthor({ name: `${target.displayName}'s Messages`, iconURL: target.user.displayAvatarURL() })
+        .addFields(
+          { name: '<:user:1487021741720076309> All Time', value: `**${allTime.toLocaleString()}** messages`, inline: true },
+          { name: '📅 Today', value: `**${todayCount.toLocaleString()}** messages`, inline: true },
+          { name: '🏆 Rank', value: rank > 0 ? `**#${rank}**` : 'Unranked', inline: true }
+        )
+        .setFooter({ text: `Tracking since bot joined · ${message.guild.name}` })
+        .setTimestamp();
+
+      message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(makeDeleteBtn(invokerId))] });
+    } catch (err) { console.error(err); message.reply("Error fetching message count."); }
+  }
+
+  // ─── LEADERBOARDS ─────────────────────────────────────────
+  const lbAliases = ['lb', 'leaderboard'];
+  if (lbAliases.includes(command)) {
+    const sub = args[1]?.toLowerCase();
+    const msgSubs = ['m', 'message', 'messages'];
+    const dailySubs = ['dm', 'dailymessage', 'dailymessages', 'daily'];
+
+    if (msgSubs.includes(sub)) {
+      // All-time message leaderboard
+      try {
+        const msgData = loadMsgData();
+        const gKey = message.guild.id;
+        const entries = Object.entries(msgData[gKey] || {}).sort((a,b) => b[1]-a[1]);
+        if (entries.length === 0) return message.reply("No messages tracked yet!");
+
+        const PAGE_SIZE = 10;
+        const totalPages = Math.ceil(entries.length / PAGE_SIZE);
+
+        async function buildLbEmbed(page) {
+          const slice = entries.slice(page * PAGE_SIZE, (page+1) * PAGE_SIZE);
+          const lines = await Promise.all(slice.map(async ([uid, count], i) => {
+            const rank = page * PAGE_SIZE + i + 1;
+            const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `**#${rank}**`;
+            let name;
+            try {
+              const mem = await message.guild.members.fetch(uid).catch(() => null);
+              name = mem ? mem.displayName : `<@${uid}>`;
+            } catch { name = `<@${uid}>`; }
+            return `${medal} ${name} — **${count.toLocaleString()}** messages`;
+          }));
+
+          return new EmbedBuilder()
+            .setColor(0x2b2d31)
+            .setAuthor({ name: `${message.guild.name} — Message Leaderboard`, iconURL: message.guild.iconURL() })
+            .setDescription(lines.join('\n'))
+            .setFooter({ text: `Page ${page+1}/${totalPages} · ${entries.length} members tracked` })
+            .setTimestamp();
+        }
+
+        let page = 0;
+        const embed = await buildLbEmbed(page);
+        const makeRow = (p) => new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`lb_first_${p}_${invokerId}`).setLabel('⏮').setStyle(ButtonStyle.Secondary).setDisabled(p === 0),
+          new ButtonBuilder().setCustomId(`lb_prev_${p}_${invokerId}`).setLabel('◀').setStyle(ButtonStyle.Secondary).setDisabled(p === 0),
+          new ButtonBuilder().setCustomId(`lb_next_${p}_${invokerId}`).setLabel('▶').setStyle(ButtonStyle.Secondary).setDisabled(p === totalPages - 1),
+          new ButtonBuilder().setCustomId(`lb_last_${p}_${invokerId}`).setLabel('⏭').setStyle(ButtonStyle.Secondary).setDisabled(p === totalPages - 1),
+          makeDeleteBtn(invokerId)
+        );
+
+        message.channel.send({ embeds: [embed], components: [makeRow(page)], _lbMeta: { type: 'alltime', totalPages, entries: entries.map(([id,c])=>({id,c})) } });
+      } catch (err) { console.error(err); message.reply("Error loading leaderboard."); }
+
+    } else if (dailySubs.includes(sub)) {
+      // Daily message leaderboard
+      try {
+        const daily = loadDailyData();
+        const todayIST = getTodayIST();
+        if (daily.date !== todayIST) { daily.date = todayIST; daily.counts = {}; }
+        const gKey = message.guild.id;
+        const entries = Object.entries(daily.counts[gKey] || {}).sort((a,b) => b[1]-a[1]);
+        if (entries.length === 0) return message.reply("No messages tracked today yet!");
+
+        const PAGE_SIZE = 10;
+        const totalPages = Math.ceil(entries.length / PAGE_SIZE);
+
+        async function buildDailyEmbed(page) {
+          const slice = entries.slice(page * PAGE_SIZE, (page+1) * PAGE_SIZE);
+          const lines = await Promise.all(slice.map(async ([uid, count], i) => {
+            const rank = page * PAGE_SIZE + i + 1;
+            const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `**#${rank}**`;
+            let name;
+            try {
+              const mem = await message.guild.members.fetch(uid).catch(() => null);
+              name = mem ? mem.displayName : `<@${uid}>`;
+            } catch { name = `<@${uid}>`; }
+            return `${medal} ${name} — **${count.toLocaleString()}** messages today`;
+          }));
+
+          return new EmbedBuilder()
+            .setColor(0x2b2d31)
+            .setAuthor({ name: `${message.guild.name} — Daily Message Leaderboard`, iconURL: message.guild.iconURL() })
+            .setDescription(lines.join('\n'))
+            .setFooter({ text: `Page ${page+1}/${totalPages} · Resets at midnight IST` })
+            .setTimestamp();
+        }
+
+        let page = 0;
+        const embed = await buildDailyEmbed(page);
+        const makeRow = (p) => new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`dlb_first_${p}_${invokerId}`).setLabel('⏮').setStyle(ButtonStyle.Secondary).setDisabled(p === 0),
+          new ButtonBuilder().setCustomId(`dlb_prev_${p}_${invokerId}`).setLabel('◀').setStyle(ButtonStyle.Secondary).setDisabled(p === 0),
+          new ButtonBuilder().setCustomId(`dlb_next_${p}_${invokerId}`).setLabel('▶').setStyle(ButtonStyle.Secondary).setDisabled(p === totalPages - 1),
+          new ButtonBuilder().setCustomId(`dlb_last_${p}_${invokerId}`).setLabel('⏭').setStyle(ButtonStyle.Secondary).setDisabled(p === totalPages - 1),
+          makeDeleteBtn(invokerId)
+        );
+
+        message.channel.send({ embeds: [embed], components: [makeRow(page)] });
+      } catch (err) { console.error(err); message.reply("Error loading daily leaderboard."); }
+    }
+  }
+
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -2632,6 +2813,67 @@ client.on('interactionCreate', async interaction => {
 
     if (customId.startsWith('delete_msg_')) {
       return interaction.message.delete();
+    }
+
+    // ─── LEADERBOARD PAGINATION ───────────────────────────
+    if (customId.startsWith('lb_') || customId.startsWith('dlb_')) {
+      const isDaily = customId.startsWith('dlb_');
+      const parts2 = customId.split('_');
+      // format: lb_action_currentPage_invokerId or dlb_action_currentPage_invokerId
+      const action = parts2[1];
+      const currentPage = parseInt(parts2[2]);
+      const gKey = interaction.guild.id;
+
+      const msgData = loadMsgData();
+      const daily = loadDailyData();
+      const todayIST = getTodayIST();
+      if (daily.date !== todayIST) { daily.date = todayIST; daily.counts = {}; }
+
+      const entries = isDaily
+        ? Object.entries(daily.counts[gKey] || {}).sort((a,b) => b[1]-a[1])
+        : Object.entries(msgData[gKey] || {}).sort((a,b) => b[1]-a[1]);
+
+      const PAGE_SIZE = 10;
+      const totalPages = Math.ceil(entries.length / PAGE_SIZE);
+
+      let newPage = currentPage;
+      if (action === 'first') newPage = 0;
+      else if (action === 'prev') newPage = Math.max(0, currentPage - 1);
+      else if (action === 'next') newPage = Math.min(totalPages - 1, currentPage + 1);
+      else if (action === 'last') newPage = totalPages - 1;
+
+      const slice = entries.slice(newPage * PAGE_SIZE, (newPage+1) * PAGE_SIZE);
+      const lines = await Promise.all(slice.map(async ([uid, count], i) => {
+        const rank = newPage * PAGE_SIZE + i + 1;
+        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `**#${rank}**`;
+        let name;
+        try {
+          const mem = await interaction.guild.members.fetch(uid).catch(() => null);
+          name = mem ? mem.displayName : `<@${uid}>`;
+        } catch { name = `<@${uid}>`; }
+        return `${medal} ${name} — **${count.toLocaleString()}** messages${isDaily ? ' today' : ''}`;
+      }));
+
+      const embed = new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setAuthor({
+          name: `${interaction.guild.name} — ${isDaily ? 'Daily ' : ''}Message Leaderboard`,
+          iconURL: interaction.guild.iconURL()
+        })
+        .setDescription(lines.join('\n'))
+        .setFooter({ text: `Page ${newPage+1}/${totalPages} · ${isDaily ? 'Resets at midnight IST' : `${entries.length} members tracked`}` })
+        .setTimestamp();
+
+      const prefix2 = isDaily ? 'dlb' : 'lb';
+      const makeRow = (p) => new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`${prefix2}_first_${p}_${embeddedInvokerId}`).setLabel('⏮').setStyle(ButtonStyle.Secondary).setDisabled(p === 0),
+        new ButtonBuilder().setCustomId(`${prefix2}_prev_${p}_${embeddedInvokerId}`).setLabel('◀').setStyle(ButtonStyle.Secondary).setDisabled(p === 0),
+        new ButtonBuilder().setCustomId(`${prefix2}_next_${p}_${embeddedInvokerId}`).setLabel('▶').setStyle(ButtonStyle.Secondary).setDisabled(p === totalPages - 1),
+        new ButtonBuilder().setCustomId(`${prefix2}_last_${p}_${embeddedInvokerId}`).setLabel('⏭').setStyle(ButtonStyle.Secondary).setDisabled(p === totalPages - 1),
+        makeDeleteBtn(embeddedInvokerId)
+      );
+
+      return interaction.update({ embeds: [embed], components: [makeRow(newPage)] });
     }
 
     // ─── TD REROLL ────────────────────────────────────────
@@ -3229,6 +3471,81 @@ client.on('messageReactionAdd', async (reaction, user) => {
   } catch (err) {
     console.error('Starboard error:', err);
   }
+});
+
+
+// ─── MIDNIGHT IST RESET + HONORED ONE ────────────────────────
+function msUntilISTTime(hour, minute) {
+  const now = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  const target = new Date(now);
+  target.setUTCHours(hour - 5, minute - 30, 0, 0); // convert IST to UTC
+  // Actually just compute raw ms to next occurrence
+  const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  const targetIST = new Date(nowIST);
+  targetIST.setHours(hour, minute, 0, 0);
+  if (targetIST <= nowIST) targetIST.setDate(targetIST.getDate() + 1);
+  return targetIST - nowIST;
+}
+
+async function runMidnightTasks() {
+  try {
+    // Reset daily messages
+    const daily = loadDailyData();
+    daily.date = getTodayIST();
+    daily.counts = {};
+    saveDailyData(daily);
+    console.log('[Midnight IST] Daily message counts reset.');
+  } catch (e) { console.error('Midnight reset error:', e); }
+
+  // Schedule next midnight
+  setTimeout(runMidnightTasks, msUntilISTTime(0, 0));
+}
+
+async function runHonoredOne() {
+  try {
+    for (const [guildId, guild] of client.guilds.cache) {
+      const msgData = loadMsgData();
+      const entries = Object.entries(msgData[guildId] || {}).sort((a,b) => b[1]-a[1]);
+      if (entries.length === 0) continue;
+
+      const topId = entries[0][0];
+      const honoredRole = guild.roles.cache.get(HONORED_ROLE_ID);
+      if (!honoredRole) continue;
+
+      // Remove from all current holders
+      const currentHolders = guild.members.cache.filter(m => m.roles.cache.has(HONORED_ROLE_ID));
+      for (const [, member] of currentHolders) {
+        if (member.id !== topId) {
+          try { await member.roles.remove(honoredRole, 'Honored One: new winner'); } catch {}
+        }
+      }
+
+      // Add to new top
+      const topMember = await guild.members.fetch(topId).catch(() => null);
+      if (topMember && !topMember.roles.cache.has(HONORED_ROLE_ID)) {
+        try { await topMember.roles.add(honoredRole, 'Honored One: top message sender'); } catch {}
+      }
+
+      sendLog(guild, new EmbedBuilder()
+        .setColor(0xFFD700)
+        .setAuthor({ name: '👑 Honored One Updated', iconURL: guild.iconURL() })
+        .setDescription(`<@${topId}> is now the **Honored One** with **${entries[0][1].toLocaleString()} messages**!`)
+        .setTimestamp());
+
+      console.log(`[Honored One] Set ${topId} as Honored One in ${guild.name}`);
+    }
+  } catch (e) { console.error('Honored One error:', e); }
+
+  // Schedule next 11:59 PM IST
+  setTimeout(runHonoredOne, msUntilISTTime(23, 59));
+}
+
+client.once('ready', () => {
+  // Schedule midnight reset
+  setTimeout(runMidnightTasks, msUntilISTTime(0, 0));
+  // Schedule honored one check
+  setTimeout(runHonoredOne, msUntilISTTime(23, 59));
+  console.log('[Scheduler] Midnight reset and Honored One scheduled.');
 });
 
 client.login(process.env.TOKEN);
