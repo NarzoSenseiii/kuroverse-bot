@@ -3533,4 +3533,6 @@ client.once('ready', () => {
   console.log('[Scheduler] Midnight reset and Honored One scheduled.');
 });
 
-client.login(process.env.TOKEN);
+connectDB().then(() => {
+  client.login(process.env.TOKEN);
+});
